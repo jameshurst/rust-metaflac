@@ -18,7 +18,7 @@ use block::{
     PaddingBlockType,
 }; 
 
-use std::io::{File, SeekSet, SeekCur, Open, Write};
+use std::io::{File, SeekSet, SeekCur, Truncate, Write};
 
 /// A structure representing a flac metadata tag.
 pub struct FlacTag {
@@ -312,18 +312,18 @@ impl AudioTag for FlacTag {
         }
 
         let path = self.path.clone().unwrap();
-        self.write(&path)
+        self.write_to_path(&path)
     }
 
-    fn skip_metadata(path: &Path) -> Vec<u8> {
+    fn skip_metadata<R: Reader + Seek>(reader: &mut R, _: Option<FlacTag>) -> Vec<u8> {
         macro_rules! try_io {
-            ($file:ident, $action:expr) => {
+            ($reader:ident, $action:expr) => {
                 match $action { 
                     Ok(bytes) => bytes, 
                     Err(_) => {
-                        match $file.seek(0, SeekSet) {
+                        match $reader.seek(0, SeekSet) {
                             Ok(_) => {
-                                match $file.read_to_end() {
+                                match $reader.read_to_end() {
                                     Ok(bytes) => return bytes,
                                     Err(_) => return Vec::new()
                                 }
@@ -335,31 +335,26 @@ impl AudioTag for FlacTag {
             }
         }
 
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(_) => return Vec::new()
-        };
-
-        let ident = try_io!(file, file.read_exact(4));
+        let ident = try_io!(reader, reader.read_exact(4));
         if ident.as_slice() == b"fLaC" {
             let mut more = true;
             while more {
-                let header = try_io!(file, file.read_be_u32());
+                let header = try_io!(reader, reader.read_be_u32());
                 
                 more = ((header >> 24) & 0x80) == 0;
                 let length = header & 0xFF_FF_FF;
 
                 debug!("skipping {} bytes", length);
-                try_io!(file, file.seek(length as i64, SeekCur));
+                try_io!(reader, reader.seek(length as i64, SeekCur));
             }
         } else {
-            try_io!(file, file.seek(0, SeekSet));
+            try_io!(reader, reader.seek(0, SeekSet));
         }
 
-        try_io!(file, file.read_to_end())
+        try_io!(reader, reader.read_to_end())
     }
 
-    fn is_candidate(path: &Path, _: Option<FlacTag>) -> bool {
+    fn is_candidate(reader: &mut Reader, _: Option<FlacTag>) -> bool {
         macro_rules! try_or_false {
             ($action:expr) => {
                 match $action { 
@@ -369,14 +364,29 @@ impl AudioTag for FlacTag {
             }
         }
 
-        (try_or_false!((try_or_false!(File::open(path))).read_exact(4))).as_slice() == b"fLaC"
+        (try_or_false!(reader.read_exact(4))).as_slice() == b"fLaC"
     }
 
-    fn write(&mut self, path: &Path) -> TagResult<()> {
-        self.path = Some(path.clone());
+    fn read_from(reader: &mut Reader) -> TagResult<FlacTag> {
+        let mut tag = FlacTag::new();
 
-        let data = AudioTag::skip_metadata(path);
+        let ident = try!(reader.read_exact(4));
+        if ident.as_slice() != b"fLaC" {
+            return Err(TagError::new(InvalidInputError, "reader does not contain flac metadata"));
+        }
 
+        loop {
+            let (is_last, block) = try!(Block::read_from(reader));
+            tag.blocks.push(block);
+            if is_last {
+                break;
+            }
+        }
+
+        Ok(tag)
+    }
+
+    fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
         // TODO support padding
         self.blocks.retain(|block| block.block_type() != PaddingBlockType as u8);
 
@@ -397,38 +407,42 @@ impl AudioTag for FlacTag {
             list.as_slice().connect(", ")
         });
 
-        let mut file = try!(File::open_mode(path, Open, Write));
-        try!(file.write(b"fLaC"));
-        
+        try!(writer.write(b"fLaC"));
+
         let nblocks = self.blocks.len();
         for i in range(0, nblocks) {
             let block = &self.blocks[i];
-            try!(block.write_to(i == nblocks - 1, &mut file));
+            try!(block.write_to(i == nblocks - 1, writer));
         }
-
-        try!(file.write(data.as_slice()));
 
         Ok(())
     }
 
-    fn load(path: &Path) -> TagResult<FlacTag> {
-        let mut tag = FlacTag::new();
-        tag.path = Some(path.clone());
+    fn write_to_path(&mut self, path: &Path) -> TagResult<()> {
+        self.path = Some(path.clone());
 
-        let mut file = try!(File::open(path));
-        let ident = try!(file.read_exact(4));
-        if ident.as_slice() != b"fLaC" {
-            return Err(TagError::new(InvalidInputError, "file does not contain flac metadata"));
-        }
-
-        loop {
-            let (is_last, block) = try!(Block::read_from(&mut file));
-            tag.blocks.push(block);
-            if is_last {
-                break;
+        let data_opt = {
+            match File::open(path) {
+                Ok(mut file) => Some(AudioTag::skip_metadata(&mut file, None::<FlacTag>)),
+                Err(_) => None
             }
+        };
+        
+        let mut file = try!(File::open_mode(path, Truncate, Write));
+        try!(self.write_to(&mut file));
+
+        match data_opt {
+            Some(data) => try!(file.write(data.as_slice())),
+            None => {}
         }
 
+        Ok(())
+    }
+
+    fn read_from_path(path: &Path) -> TagResult<FlacTag> {
+        let mut file = try!(File::open(path));
+        let mut tag = try!(AudioTag::read_from(&mut file));
+        tag.path = Some(path.clone());
         Ok(tag)
     }
 

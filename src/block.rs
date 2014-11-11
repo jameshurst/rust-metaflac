@@ -2,7 +2,7 @@ extern crate core;
 extern crate serialize;
 extern crate audiotag;
 
-use self::audiotag::{AudioTag, TagError, TagResult, InvalidInputError, StringDecodingError};
+use self::audiotag::{TagError, TagResult, InvalidInputError, StringDecodingError};
 use util;
 
 use std::ascii::AsciiExt;
