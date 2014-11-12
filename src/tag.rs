@@ -227,7 +227,7 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg", CoverFront, [0xFF]);
+    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
     ///
     /// assert_eq!(tag.pictures().len(), 1);
     /// ```
@@ -252,19 +252,19 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg", CoverFront, [0xFF]);
+    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
     /// 
     /// assert_eq!(tag.pictures()[0].mime_type.as_slice(), "image/jpeg"); 
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xFF).as_slice());
     /// ```
-    pub fn add_picture(&mut self, mime_type: &str, picture_type: picture_type::PictureType, data: &[u8]) {
+    pub fn add_picture(&mut self, mime_type: String, picture_type: picture_type::PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
-        picture.mime_type = String::from_str(mime_type);
+        picture.mime_type = mime_type;
         picture.picture_type = picture_type;
-        picture.data = data.to_vec();
+        picture.data = data;
 
         self.blocks.push(PictureBlock(picture));
     }
@@ -279,8 +279,8 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg", CoverFront, [0xFF]);
-    /// tag.add_picture("image/png", Other, [0xAB]);
+    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
+    /// tag.add_picture("image/png".into_string(), Other, vec!(0xAB));
     /// assert_eq!(tag.pictures().len(), 2);
     ///
     /// tag.remove_picture_type(CoverFront);
@@ -451,9 +451,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("ARTIST"))
     }
 
-    fn set_artist(&mut self, artist: &str) {
+    fn set_artist(&mut self, artist: String) {
         self.remove_vorbis_key(&String::from_str("ARTISTSORT"));
-        self.set_vorbis_key(String::from_str("ARTIST"), vec!(String::from_str(artist)));
+        self.set_vorbis_key(String::from_str("ARTIST"), vec!(artist));
     }
 
     fn remove_artist(&mut self) {
@@ -465,9 +465,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("ALBUM"))
     }
 
-    fn set_album(&mut self, album: &str) {
+    fn set_album(&mut self, album: String) {
         self.remove_vorbis_key(&String::from_str("ALBUMSORT"));
-        self.set_vorbis_key(String::from_str("ALBUM"), vec!(String::from_str(album)));
+        self.set_vorbis_key(String::from_str("ALBUM"), vec!(album));
     }
 
     fn remove_album(&mut self) {
@@ -479,8 +479,8 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("GENRE"))
     }
 
-    fn set_genre(&mut self, genre: &str) {
-        self.set_vorbis_key(String::from_str("GENRE"), vec!(String::from_str(genre)));
+    fn set_genre(&mut self, genre: String) {
+        self.set_vorbis_key(String::from_str("GENRE"), vec!(genre));
     }
 
     fn remove_genre(&mut self) {
@@ -491,9 +491,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("TITLE"))
     }
 
-    fn set_title(&mut self, title: &str) {
+    fn set_title(&mut self, title: String) {
         self.remove_vorbis_key(&String::from_str("TITLESORT"));
-        self.set_vorbis_key(String::from_str("TITLE"), vec!(String::from_str(title)));
+        self.set_vorbis_key(String::from_str("TITLE"), vec!(title));
     }
 
     fn remove_title(&mut self) {
@@ -530,9 +530,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("ALBUMARTIST"))
     }
 
-    fn set_album_artist(&mut self, album_artist: &str) {
+    fn set_album_artist(&mut self, album_artist: String) {
         self.remove_vorbis_key(&String::from_str("ALBUMARTISTSORT"));
-        self.set_vorbis_key(String::from_str("ALBUMARTIST"), vec!(String::from_str(album_artist)));
+        self.set_vorbis_key(String::from_str("ALBUMARTIST"), vec!(album_artist));
     }
 
     fn remove_album_artist(&mut self) {
@@ -544,15 +544,15 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&String::from_str("LYRICS"))
     }
 
-    fn set_lyrics(&mut self, lyrics: &str) {
-        self.set_vorbis_key(String::from_str("LYRICS"), vec!(String::from_str(lyrics)));
+    fn set_lyrics(&mut self, lyrics: String) {
+        self.set_vorbis_key(String::from_str("LYRICS"), vec!(lyrics));
     }
 
     fn remove_lyrics(&mut self) {
         self.remove_vorbis_key(&String::from_str("LYRICS"));
     }
 
-    fn set_picture(&mut self, mime_type: &str, data: &[u8]) {
+    fn set_picture(&mut self, mime_type: String, data: Vec<u8>) {
         self.remove_picture();
         self.add_picture(mime_type, picture_type::Other, data);
     }
