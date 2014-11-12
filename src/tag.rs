@@ -44,7 +44,7 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.vorbis_comments().len(), 0);
     ///
-    /// tag.set_vorbis_key(String::from_str("key"), vec!(String::from_str("value")));
+    /// tag.set_vorbis_key("key".into_string(), vec!("value".into_string()));
     ///
     /// assert_eq!(tag.vorbis_comments().len(), 1);
     /// ```
@@ -71,9 +71,9 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.vorbis_comments().len(), 0);
     ///
-    /// let key = String::from_str("key");
-    /// let value1 = String::from_str("value1");
-    /// let value2 = String::from_str("value2");
+    /// let key = "key".into_string();
+    /// let value1 = "value1".into_string();
+    /// let value2 = "value2".into_string();
     ///
     /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone())); 
@@ -121,9 +121,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = String::from_str("key");
-    /// let value1 = String::from_str("value1");
-    /// let value2 = String::from_str("value2");
+    /// let key = "key".into_string();
+    /// let value1 = "value1".into_string();
+    /// let value2 = "value2".into_string();
     ///
     /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone()));
@@ -154,9 +154,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = String::from_str("key");
-    /// let value1 = String::from_str("value1");
-    /// let value2 = String::from_str("value2");
+    /// let key = "key".into_string();
+    /// let value1 = "value1".into_string();
+    /// let value2 = "value2".into_string();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
     ///
@@ -174,9 +174,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = String::from_str("key");
-    /// let value1 = String::from_str("value1");
-    /// let value2 = String::from_str("value2");
+    /// let key = "key".into_string();
+    /// let value1 = "value1".into_string();
+    /// let value2 = "value2".into_string();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone())); 
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
@@ -198,9 +198,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = String::from_str("key");
-    /// let value1 = String::from_str("value1");
-    /// let value2 = String::from_str("value2");
+    /// let key = "key".into_string();
+    /// let value1 = "value1".into_string();
+    /// let value2 = "value2".into_string();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
@@ -448,108 +448,108 @@ impl AudioTag for FlacTag {
 
     // Getters/Setters {{{
     fn artist(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("ARTIST"))
+        self.get_vorbis_key(&"ARTIST".into_string())
     }
 
     fn set_artist(&mut self, artist: String) {
-        self.remove_vorbis_key(&String::from_str("ARTISTSORT"));
-        self.set_vorbis_key(String::from_str("ARTIST"), vec!(artist));
+        self.remove_vorbis_key(&"ARTISTSORT".into_string());
+        self.set_vorbis_key("ARTIST".into_string(), vec!(artist));
     }
 
     fn remove_artist(&mut self) {
-        self.remove_vorbis_key(&String::from_str("ARTISTSORT"));
-        self.remove_vorbis_key(&String::from_str("ARTIST"));
+        self.remove_vorbis_key(&"ARTISTSORT".into_string());
+        self.remove_vorbis_key(&"ARTIST".into_string());
     }
 
     fn album(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("ALBUM"))
+        self.get_vorbis_key(&"ALBUM".into_string())
     }
 
     fn set_album(&mut self, album: String) {
-        self.remove_vorbis_key(&String::from_str("ALBUMSORT"));
-        self.set_vorbis_key(String::from_str("ALBUM"), vec!(album));
+        self.remove_vorbis_key(&"ALBUMSORT".into_string());
+        self.set_vorbis_key("ALBUM".into_string(), vec!(album));
     }
 
     fn remove_album(&mut self) {
-        self.remove_vorbis_key(&String::from_str("ALBUMSORT"));
-        self.remove_vorbis_key(&String::from_str("ALBUM"));
+        self.remove_vorbis_key(&"ALBUMSORT".into_string());
+        self.remove_vorbis_key(&"ALBUM".into_string());
     }
     
     fn genre(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("GENRE"))
+        self.get_vorbis_key(&"GENRE".into_string())
     }
 
     fn set_genre(&mut self, genre: String) {
-        self.set_vorbis_key(String::from_str("GENRE"), vec!(genre));
+        self.set_vorbis_key("GENRE".into_string(), vec!(genre));
     }
 
     fn remove_genre(&mut self) {
-        self.remove_vorbis_key(&String::from_str("GENRE"));
+        self.remove_vorbis_key(&"GENRE".into_string());
     }
 
     fn title(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("TITLE"))
+        self.get_vorbis_key(&"TITLE".into_string())
     }
 
     fn set_title(&mut self, title: String) {
-        self.remove_vorbis_key(&String::from_str("TITLESORT"));
-        self.set_vorbis_key(String::from_str("TITLE"), vec!(title));
+        self.remove_vorbis_key(&"TITLESORT".into_string());
+        self.set_vorbis_key("TITLE".into_string(), vec!(title));
     }
 
     fn remove_title(&mut self) {
-        self.remove_vorbis_key(&String::from_str("TITLESORT"));
-        self.remove_vorbis_key(&String::from_str("TITLE"));
+        self.remove_vorbis_key(&"TITLESORT".into_string());
+        self.remove_vorbis_key(&"TITLE".into_string());
     }
 
     fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&String::from_str("TRACKNUMBER")).and_then(|s| from_str(s.as_slice()))
+        self.get_vorbis_key(&"TRACKNUMBER".into_string()).and_then(|s| from_str(s.as_slice()))
     }
 
     fn set_track(&mut self, track: u32) {
-        self.set_vorbis_key(String::from_str("TRACKNUMBER"), vec!(format!("{}", track)));
+        self.set_vorbis_key("TRACKNUMBER".into_string(), vec!(format!("{}", track)));
     }
 
     fn remove_track(&mut self) {
-        self.remove_vorbis_key(&String::from_str("TRACKNUMBER"));
-        self.remove_vorbis_key(&String::from_str("TOTALTRACKS"));
+        self.remove_vorbis_key(&"TRACKNUMBER".into_string());
+        self.remove_vorbis_key(&"TOTALTRACKS".into_string());
     }
     
     fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&String::from_str("TOTALTRACKS")).and_then(|s| from_str(s.as_slice()))
+        self.get_vorbis_key(&"TOTALTRACKS".into_string()).and_then(|s| from_str(s.as_slice()))
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
-        self.set_vorbis_key(String::from_str("TOTALTRACKS"), vec!(format!("{}", total_tracks)));
+        self.set_vorbis_key("TOTALTRACKS".into_string(), vec!(format!("{}", total_tracks)));
     }
 
     fn remove_total_tracks(&mut self) {
-        self.remove_vorbis_key(&String::from_str("TOTALTRACKS"));
+        self.remove_vorbis_key(&"TOTALTRACKS".into_string());
     }
     
     fn album_artist(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("ALBUMARTIST"))
+        self.get_vorbis_key(&"ALBUMARTIST".into_string())
     }
 
     fn set_album_artist(&mut self, album_artist: String) {
-        self.remove_vorbis_key(&String::from_str("ALBUMARTISTSORT"));
-        self.set_vorbis_key(String::from_str("ALBUMARTIST"), vec!(album_artist));
+        self.remove_vorbis_key(&"ALBUMARTISTSORT".into_string());
+        self.set_vorbis_key("ALBUMARTIST".into_string(), vec!(album_artist));
     }
 
     fn remove_album_artist(&mut self) {
-        self.remove_vorbis_key(&String::from_str("ALBUMARTISTSORT"));
-        self.remove_vorbis_key(&String::from_str("ALBUMARTIST"));
+        self.remove_vorbis_key(&"ALBUMARTISTSORT".into_string());
+        self.remove_vorbis_key(&"ALBUMARTIST".into_string());
     }
 
     fn lyrics(&self) -> Option<String> {
-        self.get_vorbis_key(&String::from_str("LYRICS"))
+        self.get_vorbis_key(&"LYRICS".into_string())
     }
 
     fn set_lyrics(&mut self, lyrics: String) {
-        self.set_vorbis_key(String::from_str("LYRICS"), vec!(lyrics));
+        self.set_vorbis_key("LYRICS".into_string(), vec!(lyrics));
     }
 
     fn remove_lyrics(&mut self) {
-        self.remove_vorbis_key(&String::from_str("LYRICS"));
+        self.remove_vorbis_key(&"LYRICS".into_string());
     }
 
     fn set_picture(&mut self, mime_type: String, data: Vec<u8>) {
