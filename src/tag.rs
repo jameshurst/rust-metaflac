@@ -44,7 +44,7 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.vorbis_comments().len(), 0);
     ///
-    /// tag.set_vorbis_key("key".into_string(), vec!("value".into_string()));
+    /// tag.set_vorbis_key("key", vec!("value"));
     ///
     /// assert_eq!(tag.vorbis_comments().len(), 1);
     /// ```
@@ -162,8 +162,8 @@ impl FlacTag {
     ///
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
     /// ```
-    pub fn set_vorbis_key(&mut self, key: String, values: Vec<String>) {
-        self.vorbis_comments_mut()[0].comments.insert(key, values);
+    pub fn set_vorbis_key<K: StrAllocating, V: StrAllocating>(&mut self, key: K, values: Vec<V>) {
+        self.vorbis_comments_mut()[0].comments.insert(key.into_string(), values.into_iter().map(|s| s.into_string()).collect());
     }
 
     /// Removes the values for the specified vorbis comment key.
@@ -227,7 +227,7 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
+    /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     ///
     /// assert_eq!(tag.pictures().len(), 1);
     /// ```
@@ -252,17 +252,17 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
+    /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     /// 
     /// assert_eq!(tag.pictures()[0].mime_type.as_slice(), "image/jpeg"); 
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xFF).as_slice());
     /// ```
-    pub fn add_picture(&mut self, mime_type: String, picture_type: picture_type::PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: StrAllocating>(&mut self, mime_type: T, picture_type: picture_type::PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
-        picture.mime_type = mime_type;
+        picture.mime_type = mime_type.into_string();
         picture.picture_type = picture_type;
         picture.data = data;
 
@@ -279,8 +279,8 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
-    /// tag.add_picture("image/jpeg".into_string(), CoverFront, vec!(0xFF));
-    /// tag.add_picture("image/png".into_string(), Other, vec!(0xAB));
+    /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
+    /// tag.add_picture("image/png", Other, vec!(0xAB));
     /// assert_eq!(tag.pictures().len(), 2);
     ///
     /// tag.remove_picture_type(CoverFront);
@@ -451,9 +451,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"ARTIST".into_string())
     }
 
-    fn set_artist(&mut self, artist: String) {
+    fn set_artist<T: StrAllocating>(&mut self, artist: T) {
         self.remove_vorbis_key(&"ARTISTSORT".into_string());
-        self.set_vorbis_key("ARTIST".into_string(), vec!(artist));
+        self.set_vorbis_key("ARTIST", vec!(artist));
     }
 
     fn remove_artist(&mut self) {
@@ -465,9 +465,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"ALBUM".into_string())
     }
 
-    fn set_album(&mut self, album: String) {
+    fn set_album<T: StrAllocating>(&mut self, album: T) {
         self.remove_vorbis_key(&"ALBUMSORT".into_string());
-        self.set_vorbis_key("ALBUM".into_string(), vec!(album));
+        self.set_vorbis_key("ALBUM", vec!(album));
     }
 
     fn remove_album(&mut self) {
@@ -479,8 +479,8 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"GENRE".into_string())
     }
 
-    fn set_genre(&mut self, genre: String) {
-        self.set_vorbis_key("GENRE".into_string(), vec!(genre));
+    fn set_genre<T: StrAllocating>(&mut self, genre: T) {
+        self.set_vorbis_key("GENRE", vec!(genre));
     }
 
     fn remove_genre(&mut self) {
@@ -491,9 +491,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"TITLE".into_string())
     }
 
-    fn set_title(&mut self, title: String) {
+    fn set_title<T: StrAllocating>(&mut self, title: T) {
         self.remove_vorbis_key(&"TITLESORT".into_string());
-        self.set_vorbis_key("TITLE".into_string(), vec!(title));
+        self.set_vorbis_key("TITLE", vec!(title));
     }
 
     fn remove_title(&mut self) {
@@ -506,7 +506,7 @@ impl AudioTag for FlacTag {
     }
 
     fn set_track(&mut self, track: u32) {
-        self.set_vorbis_key("TRACKNUMBER".into_string(), vec!(format!("{}", track)));
+        self.set_vorbis_key("TRACKNUMBER", vec!(format!("{}", track)));
     }
 
     fn remove_track(&mut self) {
@@ -519,7 +519,7 @@ impl AudioTag for FlacTag {
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
-        self.set_vorbis_key("TOTALTRACKS".into_string(), vec!(format!("{}", total_tracks)));
+        self.set_vorbis_key("TOTALTRACKS", vec!(format!("{}", total_tracks)));
     }
 
     fn remove_total_tracks(&mut self) {
@@ -530,9 +530,9 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"ALBUMARTIST".into_string())
     }
 
-    fn set_album_artist(&mut self, album_artist: String) {
+    fn set_album_artist<T: StrAllocating>(&mut self, album_artist: T) {
         self.remove_vorbis_key(&"ALBUMARTISTSORT".into_string());
-        self.set_vorbis_key("ALBUMARTIST".into_string(), vec!(album_artist));
+        self.set_vorbis_key("ALBUMARTIST", vec!(album_artist));
     }
 
     fn remove_album_artist(&mut self) {
@@ -544,15 +544,15 @@ impl AudioTag for FlacTag {
         self.get_vorbis_key(&"LYRICS".into_string())
     }
 
-    fn set_lyrics(&mut self, lyrics: String) {
-        self.set_vorbis_key("LYRICS".into_string(), vec!(lyrics));
+    fn set_lyrics<T: StrAllocating>(&mut self, lyrics: T) {
+        self.set_vorbis_key("LYRICS", vec!(lyrics));
     }
 
     fn remove_lyrics(&mut self) {
         self.remove_vorbis_key(&"LYRICS".into_string());
     }
 
-    fn set_picture(&mut self, mime_type: String, data: Vec<u8>) {
+    fn set_picture<T: StrAllocating>(&mut self, mime_type: T, data: Vec<u8>) {
         self.remove_picture();
         self.add_picture(mime_type, picture_type::Other, data);
     }
