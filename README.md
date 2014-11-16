@@ -15,7 +15,8 @@ git = "https://github.com/jamesrhurst/rust-metaflac"
 
 ```rust
 extern crate metaflac;
-use flac::{AudioTag, FlacTag};
+
+use metaflac::{AudioTag, FlacTag};
 
 fn main() {
 	let tag = AudioTag::read_from_path(&Path::new("music.flac")).unwrap();
