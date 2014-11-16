@@ -2,7 +2,7 @@
 
 A FLAC metadata reader/writer. The `FlacTag` struct implements the [AudioTag](https://github.com/jamesrhurst/rust-audiotag) trait for reading, writing, and modification of common metadata elements.
 
-Documentation is available via Rust CI [http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/](http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/).
+Documentation is available via Rust CI at [http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/](http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/).
 
 ##Usage
 
