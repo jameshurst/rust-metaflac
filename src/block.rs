@@ -3,6 +3,10 @@ extern crate serialize;
 extern crate audiotag;
 
 use self::audiotag::{TagError, TagResult, InvalidInputError, StringDecodingError};
+use self::Block::{
+    StreamInfoBlock, ApplicationBlock, CueSheetBlock, PaddingBlock, PictureBlock,
+    SeekTableBlock, VorbisCommentBlock, UnknownBlock
+};
 use util;
 
 use std::ascii::AsciiExt;
@@ -13,13 +17,13 @@ use std::io::{Reader, Writer};
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[deriving(PartialEq, FromPrimitive, Show)]
 pub enum BlockType {
-    StreamInfoBlockType,
-    PaddingBlockType,
-    ApplicationBlockType,
-    SeekTableBlockType,
-    VorbisCommentBlockType,
-    CueSheetBlockType,
-    PictureBlockType
+    StreamInfo,
+    Padding,
+    Application,
+    SeekTable,
+    VorbisComment,
+    CueSheet,
+    Picture
 }
 
 /// The parsed content of a metadata block.
@@ -63,13 +67,13 @@ impl Block {
         let block = match blocktype_opt {
             Some(blocktype) => {
                 match blocktype {
-                    StreamInfoBlockType => StreamInfoBlock(StreamInfo::from_bytes(data.as_slice())),
-                    PaddingBlockType => PaddingBlock(length as uint),
-                    ApplicationBlockType => ApplicationBlock(Application::from_bytes(data.as_slice())),
-                    SeekTableBlockType => SeekTableBlock(SeekTable::from_bytes(data.as_slice())),
-                    VorbisCommentBlockType => VorbisCommentBlock(try!(VorbisComment::from_bytes(data.as_slice()))),
-                    PictureBlockType => PictureBlock(try!(Picture::from_bytes(data.as_slice()))),
-                    CueSheetBlockType => CueSheetBlock(try!(CueSheet::from_bytes(data.as_slice())))
+                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(data.as_slice())),
+                    BlockType::Padding => PaddingBlock(length as uint),
+                    BlockType::Application => ApplicationBlock(Application::from_bytes(data.as_slice())),
+                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(data.as_slice())),
+                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(data.as_slice()))),
+                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(data.as_slice()))),
+                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(data.as_slice())))
                 }
             },
             None => UnknownBlock((blocktype_byte, data))
@@ -113,13 +117,13 @@ impl Block {
     /// Returns the corresponding block type byte for the block.
     pub fn block_type(&self) -> u8 {
         match *self {
-            StreamInfoBlock(_) => StreamInfoBlockType as u8,
-            ApplicationBlock(_) => ApplicationBlockType as u8,
-            CueSheetBlock(_) => CueSheetBlockType as u8,
-            PaddingBlock(_) => PaddingBlockType as u8,
-            PictureBlock(_) => PictureBlockType as u8,
-            SeekTableBlock(_) => SeekTableBlockType as u8,
-            VorbisCommentBlock(_) => VorbisCommentBlockType as u8,
+            StreamInfoBlock(_) => BlockType::StreamInfo as u8,
+            ApplicationBlock(_) => BlockType::Application as u8,
+            CueSheetBlock(_) => BlockType::CueSheet as u8,
+            PaddingBlock(_) => BlockType::Padding as u8,
+            PictureBlock(_) => BlockType::Picture as u8,
+            SeekTableBlock(_) => BlockType::SeekTable as u8,
+            VorbisCommentBlock(_) => BlockType::VorbisComment as u8,
             UnknownBlock((blocktype, _)) => blocktype
         }
     }
@@ -455,40 +459,37 @@ impl CueSheet {
 //}}}
 
 // Picture {{{
-/// A module containing the `PictureType` enum.
-pub mod picture_type {
-    /// Types of pictures that can be used in the picture block.
-    #[deriving(FromPrimitive, PartialEq, Show)]
-    #[allow(missing_docs)]
-    pub enum PictureType {
-        Other,
-        Icon,
-        OtherIcon,
-        CoverFront,
-        CoverBack,
-        Leaflet,
-        Media,
-        LeadArtist,
-        Artist,
-        Conductor,
-        Band,
-        Composer,
-        Lyricist,
-        RecordingLocation,
-        DuringRecording,
-        DuringPerformance,
-        ScreenCapture,
-        BrightFish,
-        Illustration,
-        BandLogo,
-        PublisherLogo
-    }
+/// Types of pictures that can be used in the picture block.
+#[deriving(FromPrimitive, PartialEq, Show)]
+#[allow(missing_docs)]
+pub enum PictureType {
+    Other,
+    Icon,
+    OtherIcon,
+    CoverFront,
+    CoverBack,
+    Leaflet,
+    Media,
+    LeadArtist,
+    Artist,
+    Conductor,
+    Band,
+    Composer,
+    Lyricist,
+    RecordingLocation,
+    DuringRecording,
+    DuringPerformance,
+    ScreenCapture,
+    BrightFish,
+    Illustration,
+    BandLogo,
+    PublisherLogo
 }
 
 /// A structure representing a PICTURE block.
 pub struct Picture {
     /// The picture type.
-    pub picture_type: picture_type::PictureType,
+    pub picture_type: PictureType,
     /// The MIME type.
     pub mime_type: String,
     /// The description of the picture.
@@ -516,7 +517,7 @@ impl Picture {
     /// Returns a new `Picture` with zero/empty values.
     pub fn new() -> Picture {
         Picture { 
-            picture_type: picture_type::Other, mime_type: String::new(),
+            picture_type: PictureType::Other, mime_type: String::new(),
             description: String::new(), width: 0, height: 0, depth: 0,
             num_colors: 0, data: Vec::new()
         }

@@ -1,22 +1,8 @@
 extern crate audiotag;
 
 use self::audiotag::{AudioTag, TagError, TagResult, InvalidInputError};
-use block::{
-    Block,
-    BlockType,
-
-    Picture, 
-    PictureBlock,
-    PictureBlockType,
-    picture_type,
-
-    StreamInfoBlock, 
-
-    VorbisComment, 
-    VorbisCommentBlock, 
-        
-    PaddingBlockType,
-}; 
+use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock};
+use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
 use std::io::{File, SeekSet, SeekCur, Truncate, Write};
 
@@ -222,7 +208,7 @@ impl FlacTag {
     /// # Example
     /// ```
     /// use metaflac::FlacTag;
-    /// use metaflac::picture_type::CoverFront;
+    /// use metaflac::PictureType::CoverFront;
     ///
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
@@ -247,7 +233,7 @@ impl FlacTag {
     /// # Example
     /// ```
     /// use metaflac::FlacTag;
-    /// use metaflac::picture_type::CoverFront;
+    /// use metaflac::PictureType::CoverFront;
     ///
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
@@ -258,7 +244,7 @@ impl FlacTag {
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xFF).as_slice());
     /// ```
-    pub fn add_picture<T: StrAllocating>(&mut self, mime_type: T, picture_type: picture_type::PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: StrAllocating>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
@@ -274,7 +260,7 @@ impl FlacTag {
     /// # Example
     /// ```
     /// use metaflac::FlacTag;
-    /// use metaflac::picture_type::{CoverFront, Other};
+    /// use metaflac::PictureType::{CoverFront, Other};
     ///
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.pictures().len(), 0);
@@ -290,7 +276,7 @@ impl FlacTag {
     /// assert_eq!(tag.pictures()[0].picture_type, Other);
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xAB).as_slice());
     /// ```
-    pub fn remove_picture_type(&mut self, picture_type: picture_type::PictureType) {
+    pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         let predicate = |block: &Block| {
             match *block {
                 PictureBlock(ref picture) => {
@@ -388,7 +374,7 @@ impl AudioTag for FlacTag {
 
     fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
         // TODO support padding
-        self.blocks.retain(|block| block.block_type() != PaddingBlockType as u8);
+        self.blocks.retain(|block| block.block_type() != BlockType::Padding as u8);
 
         let sort_value = |block: &Block| -> uint {
             match *block {
@@ -554,11 +540,11 @@ impl AudioTag for FlacTag {
 
     fn set_picture<T: StrAllocating>(&mut self, mime_type: T, data: Vec<u8>) {
         self.remove_picture();
-        self.add_picture(mime_type, picture_type::Other, data);
+        self.add_picture(mime_type, PictureType::Other, data);
     }
 
     fn remove_picture(&mut self) {
-        self.blocks.retain(|block| block.block_type() != PictureBlockType as u8);
+        self.blocks.retain(|block| block.block_type() != BlockType::Picture as u8);
     }
 
     fn all_metadata(&self) -> Vec<(String, String)> {

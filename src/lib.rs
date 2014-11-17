@@ -25,25 +25,12 @@ pub use self::audiotag::{
 
 pub use tag::FlacTag;
 pub use block::{
-    Block,
-        StreamInfoBlock,
-        ApplicationBlock,
-        CueSheetBlock,
-        PaddingBlock,
-        PictureBlock,
-        SeekTableBlock,
-        VorbisCommentBlock,
-        UnknownBlock,
-
+    Block, BlockType,
     StreamInfo, 
     Application, 
-    CueSheet,
-        CueSheetTrack,
-        CueSheetTrackIndex,
-    Picture, 
-        picture_type,
-    SeekTable,
-        SeekPoint,
+    CueSheet, CueSheetTrack, CueSheetTrackIndex,
+    Picture, PictureType,
+    SeekTable, SeekPoint,
     VorbisComment,
 };
 
