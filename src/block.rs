@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::io::{Reader, Writer};
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
+#[allow(missing_docs)]
 #[deriving(PartialEq, FromPrimitive, Show)]
 pub enum BlockType {
     StreamInfo,
@@ -419,7 +420,7 @@ impl CueSheet {
             bytes.push(0x80);
         }
 
-        bytes.push_all([0, ..258]);
+        bytes.push_all(&[0, ..258]);
 
         bytes.push(self.tracks.len() as u8);
 
@@ -441,14 +442,14 @@ impl CueSheet {
             }
             bytes.push(byte);
 
-            bytes.push_all([0, ..13]);
+            bytes.push_all(&[0, ..13]);
 
             bytes.push(track.indices.len() as u8);
 
             for index in track.indices.iter() {
                 bytes.extend(util::u64_to_be_bytes(index.offset, 8).into_iter());
                 bytes.push(index.point_num);
-                bytes.push_all([0, ..3]);
+                bytes.push_all(&[0, ..3]);
             }
         }
 
