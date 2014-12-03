@@ -2,7 +2,7 @@ extern crate core;
 extern crate serialize;
 extern crate audiotag;
 
-use self::audiotag::{TagError, TagResult, InvalidInputError, StringDecodingError};
+use self::audiotag::{TagError, TagResult, ErrorKind};
 use self::Block::{
     StreamInfoBlock, ApplicationBlock, CueSheetBlock, PaddingBlock, PictureBlock,
     SeekTableBlock, VorbisCommentBlock, UnknownBlock
@@ -534,7 +534,7 @@ impl Picture {
             Some(picture_type) => picture_type,
             None => {
                 debug!("encountered invalid picture type: {}", picture_type_u32);
-                return Err(TagError::new(InvalidInputError, "invalid picture type"))
+                return Err(TagError::new(ErrorKind::InvalidInputError, "invalid picture type"))
             }
         };
         i += 4;

@@ -12,16 +12,7 @@
 
 extern crate audiotag; 
 
-pub use self::audiotag::{
-    AudioTag,
-    TagResult, 
-    
-    TagError,
-        InternalIoError,
-        StringDecodingError,
-        InvalidInputError,
-        UnsupportedFeatureError
-};
+pub use self::audiotag::{AudioTag, TagResult, TagError, ErrorKind}; 
 
 pub use tag::FlacTag;
 pub use block::{
@@ -38,7 +29,7 @@ macro_rules! try_string {
     ($data:expr) => {
         match String::from_utf8($data) {
             Ok(string) => string,
-            Err(bytes) => return Err(TagError::new(StringDecodingError(bytes), "string was not valid utf8"))
+            Err(bytes) => return Err(TagError::new(::audiotag::ErrorKind::StringDecodingError(bytes), "string was not valid utf8"))
         }
     };
 }

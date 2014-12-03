@@ -1,6 +1,6 @@
 extern crate audiotag;
 
-use self::audiotag::{AudioTag, TagError, TagResult, InvalidInputError};
+use self::audiotag::{AudioTag, TagError, TagResult, ErrorKind};
 use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
@@ -358,7 +358,7 @@ impl AudioTag for FlacTag {
 
         let ident = try!(reader.read_exact(4));
         if ident.as_slice() != b"fLaC" {
-            return Err(TagError::new(InvalidInputError, "reader does not contain flac metadata"));
+            return Err(TagError::new(ErrorKind::InvalidInputError, "reader does not contain flac metadata"));
         }
 
         loop {
