@@ -16,7 +16,7 @@ use std::io::{Reader, Writer};
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[deriving(PartialEq, FromPrimitive, Show)]
+#[deriving(PartialEq, FromPrimitive, Show, Copy)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -276,7 +276,7 @@ impl Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[deriving(Show)]
+#[deriving(Show, Copy)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point. 
     pub offset: u64,
@@ -461,7 +461,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[deriving(FromPrimitive, PartialEq, Show)]
+#[deriving(FromPrimitive, PartialEq, Show, Copy)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -602,7 +602,7 @@ impl Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[deriving(Show)]
+#[deriving(Show, Copy)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
