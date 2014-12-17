@@ -277,15 +277,14 @@ impl FlacTag {
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xAB).as_slice());
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
-        let predicate = |block: &Block| {
+        self.blocks.retain(|block: &Block| {
             match *block {
                 PictureBlock(ref picture) => {
                     picture.picture_type != picture_type
                 },
                 _ => true
             }
-        };
-        self.blocks.retain(predicate);
+        });
     }
 
 
