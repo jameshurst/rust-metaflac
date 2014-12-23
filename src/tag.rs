@@ -5,6 +5,7 @@ use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
 use std::io::{File, SeekSet, SeekCur, Truncate, Write};
+use std::borrow::{IntoCow, ToOwned};
 
 /// A structure representing a flac metadata tag.
 pub struct FlacTag {
@@ -14,7 +15,7 @@ pub struct FlacTag {
     blocks: Vec<Block>,
 }
 
-impl FlacTag {
+impl<'a> FlacTag {
     /// Creates a new FLAC tag with no blocks.
     pub fn new() -> FlacTag {
         FlacTag { path: None, blocks: Vec::new() }
@@ -57,9 +58,9 @@ impl FlacTag {
     /// let mut tag = FlacTag::new();
     /// assert_eq!(tag.vorbis_comments().len(), 0);
     ///
-    /// let key = "key".into_string();
-    /// let value1 = "value1".into_string();
-    /// let value2 = "value2".into_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone())); 
@@ -107,9 +108,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = "key".into_string();
-    /// let value1 = "value1".into_string();
-    /// let value2 = "value2".into_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone()));
@@ -140,16 +141,16 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = "key".into_string();
-    /// let value1 = "value1".into_string();
-    /// let value2 = "value2".into_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
     ///
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
     /// ```
-    pub fn set_vorbis_key<K: StrAllocating, V: StrAllocating>(&mut self, key: K, values: Vec<V>) {
-        self.vorbis_comments_mut()[0].comments.insert(key.into_string(), values.into_iter().map(|s| s.into_string()).collect());
+    pub fn set_vorbis_key<K: IntoCow<'a, String, str>, V: IntoCow<'a, String, str>>(&mut self, key: K, values: Vec<V>) {
+        self.vorbis_comments_mut()[0].comments.insert(key.into_cow().into_owned(), values.into_iter().map(|s| s.into_cow().into_owned()).collect());
     }
 
     /// Removes the values for the specified vorbis comment key.
@@ -160,9 +161,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = "key".into_string();
-    /// let value1 = "value1".into_string();
-    /// let value2 = "value2".into_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone())); 
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
@@ -184,9 +185,9 @@ impl FlacTag {
     ///
     /// let mut tag = FlacTag::new();
     ///
-    /// let key = "key".into_string();
-    /// let value1 = "value1".into_string();
-    /// let value2 = "value2".into_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
@@ -244,11 +245,11 @@ impl FlacTag {
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xFF).as_slice());
     /// ```
-    pub fn add_picture<T: StrAllocating>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: IntoCow<'a, String, str>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
-        picture.mime_type = mime_type.into_string();
+        picture.mime_type = mime_type.into_cow().into_owned();
         picture.picture_type = picture_type;
         picture.data = data;
 
@@ -290,7 +291,7 @@ impl FlacTag {
 
 }
 
-impl AudioTag for FlacTag {
+impl<'a> AudioTag<'a> for FlacTag {
     fn save(&mut self) -> TagResult<()> {
         if self.path.is_none() {
             panic!("attempted to save metadata which was not read from a file");
@@ -433,61 +434,61 @@ impl AudioTag for FlacTag {
 
     // Getters/Setters {{{
     fn artist(&self) -> Option<String> {
-        self.get_vorbis_key(&"ARTIST".into_string())
+        self.get_vorbis_key(&"ARTIST".to_owned())
     }
 
-    fn set_artist<T: StrAllocating>(&mut self, artist: T) {
-        self.remove_vorbis_key(&"ARTISTSORT".into_string());
+    fn set_artist<T: IntoCow<'a, String, str>>(&mut self, artist: T) {
+        self.remove_vorbis_key(&"ARTISTSORT".to_owned());
         self.set_vorbis_key("ARTIST", vec!(artist));
     }
 
     fn remove_artist(&mut self) {
-        self.remove_vorbis_key(&"ARTISTSORT".into_string());
-        self.remove_vorbis_key(&"ARTIST".into_string());
+        self.remove_vorbis_key(&"ARTISTSORT".to_owned());
+        self.remove_vorbis_key(&"ARTIST".to_owned());
     }
 
     fn album(&self) -> Option<String> {
-        self.get_vorbis_key(&"ALBUM".into_string())
+        self.get_vorbis_key(&"ALBUM".to_owned())
     }
 
-    fn set_album<T: StrAllocating>(&mut self, album: T) {
-        self.remove_vorbis_key(&"ALBUMSORT".into_string());
+    fn set_album<T: IntoCow<'a, String, str>>(&mut self, album: T) {
+        self.remove_vorbis_key(&"ALBUMSORT".to_owned());
         self.set_vorbis_key("ALBUM", vec!(album));
     }
 
     fn remove_album(&mut self) {
-        self.remove_vorbis_key(&"ALBUMSORT".into_string());
-        self.remove_vorbis_key(&"ALBUM".into_string());
+        self.remove_vorbis_key(&"ALBUMSORT".to_owned());
+        self.remove_vorbis_key(&"ALBUM".to_owned());
     }
     
     fn genre(&self) -> Option<String> {
-        self.get_vorbis_key(&"GENRE".into_string())
+        self.get_vorbis_key(&"GENRE".to_owned())
     }
 
-    fn set_genre<T: StrAllocating>(&mut self, genre: T) {
+    fn set_genre<T: IntoCow<'a, String, str>>(&mut self, genre: T) {
         self.set_vorbis_key("GENRE", vec!(genre));
     }
 
     fn remove_genre(&mut self) {
-        self.remove_vorbis_key(&"GENRE".into_string());
+        self.remove_vorbis_key(&"GENRE".to_owned());
     }
 
     fn title(&self) -> Option<String> {
-        self.get_vorbis_key(&"TITLE".into_string())
+        self.get_vorbis_key(&"TITLE".to_owned())
     }
 
-    fn set_title<T: StrAllocating>(&mut self, title: T) {
-        self.remove_vorbis_key(&"TITLESORT".into_string());
+    fn set_title<T: IntoCow<'a, String, str>>(&mut self, title: T) {
+        self.remove_vorbis_key(&"TITLESORT".to_owned());
         self.set_vorbis_key("TITLE", vec!(title));
     }
 
     fn remove_title(&mut self) {
-        self.remove_vorbis_key(&"TITLESORT".into_string());
-        self.remove_vorbis_key(&"TITLE".into_string());
+        self.remove_vorbis_key(&"TITLESORT".to_owned());
+        self.remove_vorbis_key(&"TITLE".to_owned());
     }
 
     fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TRACKNUMBER".into_string()).and_then(|s| from_str(s.as_slice()))
+        self.get_vorbis_key(&"TRACKNUMBER".to_owned()).and_then(|s| from_str(s.as_slice()))
     }
 
     fn set_track(&mut self, track: u32) {
@@ -495,12 +496,12 @@ impl AudioTag for FlacTag {
     }
 
     fn remove_track(&mut self) {
-        self.remove_vorbis_key(&"TRACKNUMBER".into_string());
-        self.remove_vorbis_key(&"TOTALTRACKS".into_string());
+        self.remove_vorbis_key(&"TRACKNUMBER".to_owned());
+        self.remove_vorbis_key(&"TOTALTRACKS".to_owned());
     }
     
     fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TOTALTRACKS".into_string()).and_then(|s| from_str(s.as_slice()))
+        self.get_vorbis_key(&"TOTALTRACKS".to_owned()).and_then(|s| from_str(s.as_slice()))
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
@@ -508,36 +509,36 @@ impl AudioTag for FlacTag {
     }
 
     fn remove_total_tracks(&mut self) {
-        self.remove_vorbis_key(&"TOTALTRACKS".into_string());
+        self.remove_vorbis_key(&"TOTALTRACKS".to_owned());
     }
     
     fn album_artist(&self) -> Option<String> {
-        self.get_vorbis_key(&"ALBUMARTIST".into_string())
+        self.get_vorbis_key(&"ALBUMARTIST".to_owned())
     }
 
-    fn set_album_artist<T: StrAllocating>(&mut self, album_artist: T) {
-        self.remove_vorbis_key(&"ALBUMARTISTSORT".into_string());
+    fn set_album_artist<T: IntoCow<'a, String, str>>(&mut self, album_artist: T) {
+        self.remove_vorbis_key(&"ALBUMARTISTSORT".to_owned());
         self.set_vorbis_key("ALBUMARTIST", vec!(album_artist));
     }
 
     fn remove_album_artist(&mut self) {
-        self.remove_vorbis_key(&"ALBUMARTISTSORT".into_string());
-        self.remove_vorbis_key(&"ALBUMARTIST".into_string());
+        self.remove_vorbis_key(&"ALBUMARTISTSORT".to_owned());
+        self.remove_vorbis_key(&"ALBUMARTIST".to_owned());
     }
 
     fn lyrics(&self) -> Option<String> {
-        self.get_vorbis_key(&"LYRICS".into_string())
+        self.get_vorbis_key(&"LYRICS".to_owned())
     }
 
-    fn set_lyrics<T: StrAllocating>(&mut self, lyrics: T) {
+    fn set_lyrics<T: IntoCow<'a, String, str>>(&mut self, lyrics: T) {
         self.set_vorbis_key("LYRICS", vec!(lyrics));
     }
 
     fn remove_lyrics(&mut self) {
-        self.remove_vorbis_key(&"LYRICS".into_string());
+        self.remove_vorbis_key(&"LYRICS".to_owned());
     }
 
-    fn set_picture<T: StrAllocating>(&mut self, mime_type: T, data: Vec<u8>) {
+    fn set_picture<T: IntoCow<'a, String, str>>(&mut self, mime_type: T, data: Vec<u8>) {
         self.remove_picture();
         self.add_picture(mime_type, PictureType::Other, data);
     }
