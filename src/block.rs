@@ -1,5 +1,5 @@
 extern crate core;
-extern crate serialize;
+extern crate "rustc-serialize" as rustc_serialize;
 extern crate audiotag;
 
 use self::audiotag::{TagError, TagResult, ErrorKind};
@@ -10,7 +10,7 @@ use self::Block::{
 use util;
 
 use std::ascii::AsciiExt;
-use self::serialize::hex::ToHex;
+use self::rustc_serialize::hex::ToHex;
 use std::collections::HashMap;
 use std::io::{Reader, Writer};
 
