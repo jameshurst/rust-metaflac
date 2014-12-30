@@ -729,7 +729,7 @@ impl VorbisComment {
             i += comment_length;
 
             let comments_split: Vec<&str> = comments.splitn(2, '=').collect();
-            let key = comments_split[0].to_ascii_upper();
+            let key = comments_split[0].to_ascii_uppercase();
             let value = String::from_str(comments_split[1]);
 
             if vorbis.comments.contains_key(&key) {
