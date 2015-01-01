@@ -427,7 +427,7 @@ impl<'a> AudioTag<'a> for FlacTag {
 
     fn read_from_path(path: &Path) -> TagResult<FlacTag> {
         let mut file = try!(File::open(path));
-        let mut tag = try!(AudioTag::read_from(&mut file));
+        let mut tag: FlacTag = try!(AudioTag::read_from(&mut file));
         tag.path = Some(path.clone());
         Ok(tag)
     }

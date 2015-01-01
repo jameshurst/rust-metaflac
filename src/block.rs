@@ -13,6 +13,7 @@ use std::ascii::AsciiExt;
 use self::rustc_serialize::hex::ToHex;
 use std::collections::HashMap;
 use std::io::{Reader, Writer};
+use std::iter::repeat;
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
@@ -413,7 +414,7 @@ impl CueSheet {
         assert!(self.catalog_num.len() <= 128);
 
         bytes.extend(self.catalog_num.clone().into_bytes().into_iter());
-        bytes.extend(Vec::from_elem(128 - self.catalog_num.len(), 0).into_iter());
+        bytes.extend(repeat(0).take(128 - self.catalog_num.len()).collect::<Vec<u8>>().into_iter());
         bytes.extend(util::u64_to_be_bytes(self.num_leadin, 8).into_iter());
 
         if self.is_cd {
@@ -431,7 +432,7 @@ impl CueSheet {
             bytes.extend(util::u64_to_be_bytes(track.offset, 8).into_iter());
             bytes.push(track.number);
             bytes.extend(track.isrc.clone().into_bytes().into_iter());
-            bytes.extend(Vec::from_elem(12 - track.isrc.len(), 0).into_iter());
+            bytes.extend(repeat(0).take(12 - track.isrc.len()).collect::<Vec<u8>>().into_iter());
 
             let mut byte = 0;
             if !track.is_audio {
