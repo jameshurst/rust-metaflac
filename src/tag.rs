@@ -6,6 +6,7 @@ use block::{Block, BlockType, Picture, PictureType, VorbisComment};
 
 use std::io::{File, SeekSet, SeekCur, Truncate, Write};
 use std::borrow::IntoCow;
+use std::num::FromPrimitive;
 
 /// A structure representing a flac metadata tag.
 pub struct FlacTag {

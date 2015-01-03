@@ -14,10 +14,11 @@ use self::rustc_serialize::hex::ToHex;
 use std::collections::HashMap;
 use std::io::{Reader, Writer};
 use std::iter::repeat;
+use std::num::FromPrimitive;
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[deriving(PartialEq, FromPrimitive, Show, Copy)]
+#[derive(PartialEq, FromPrimitive, Show, Copy)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -29,7 +30,7 @@ pub enum BlockType {
 }
 
 /// The parsed content of a metadata block.
-#[deriving(Show)]
+#[derive(Show)]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
     StreamInfoBlock(StreamInfo),
@@ -277,7 +278,7 @@ impl Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[deriving(Show, Copy)]
+#[derive(Show, Copy)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point. 
     pub offset: u64,
@@ -293,7 +294,7 @@ impl CueSheetTrackIndex {
 }
 
 /// A structure representing a cuesheet track.
-#[deriving(Show)]
+#[derive(Show)]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
     /// offset to the first index point of the track. 
@@ -322,7 +323,7 @@ impl CueSheetTrack {
 }
 
 /// A structure representing a CUESHEET block.
-#[deriving(Show)]
+#[derive(Show)]
 pub struct CueSheet {
     /// Media catalog number.
     pub catalog_num: String,
@@ -421,7 +422,7 @@ impl CueSheet {
             bytes.push(0x80);
         }
 
-        bytes.push_all(&[0, ..258]);
+        bytes.push_all(&[0; 258]);
 
         bytes.push(self.tracks.len() as u8);
 
@@ -443,14 +444,14 @@ impl CueSheet {
             }
             bytes.push(byte);
 
-            bytes.push_all(&[0, ..13]);
+            bytes.push_all(&[0; 13]);
 
             bytes.push(track.indices.len() as u8);
 
             for index in track.indices.iter() {
                 bytes.extend(util::u64_to_be_bytes(index.offset, 8).into_iter());
                 bytes.push(index.point_num);
-                bytes.push_all(&[0, ..3]);
+                bytes.push_all(&[0; 3]);
             }
         }
 
@@ -462,7 +463,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[deriving(FromPrimitive, PartialEq, Show, Copy)]
+#[derive(FromPrimitive, PartialEq, Show, Copy)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -603,7 +604,7 @@ impl Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[deriving(Show, Copy)]
+#[derive(Show, Copy)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
@@ -651,7 +652,7 @@ impl SeekPoint {
 //}}}
 
 /// A structure representing a SEEKTABLE block.
-#[deriving(Show)]
+#[derive(Show)]
 pub struct SeekTable {
     /// One or more seek points. 
     pub seekpoints: Vec<SeekPoint>
@@ -693,7 +694,7 @@ impl SeekTable {
 
 // VorbisComment {{{
 /// A structure representing a VORBIS_COMMENT block.
-#[deriving(Show)]
+#[derive(Show)]
 pub struct VorbisComment {
     /// The vendor string.
     pub vendor_string: String,
