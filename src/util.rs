@@ -10,7 +10,7 @@ pub fn bytes_to_le_u64(bytes: &[u8]) -> u64 {
     let mut n = 0;
     let mut shift = 0;
     for b in bytes.iter() {
-        n += *b as u64 << shift;
+        n += (*b as u64) << shift;
         shift += 8;
     }
     n

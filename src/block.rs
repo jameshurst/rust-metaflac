@@ -189,7 +189,7 @@ impl StreamInfo {
         streaminfo.max_frame_size = util::bytes_to_be_u64(bytes.slice(i, i + 3)) as u32;
         i += 3;
 
-        streaminfo.sample_rate = (util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u32 << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
+        streaminfo.sample_rate = ((util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
         i += 2;
 
         streaminfo.num_channels = ((bytes[i] & 0x0E) >> 1) + 1;
