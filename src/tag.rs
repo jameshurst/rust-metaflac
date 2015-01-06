@@ -377,7 +377,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         // TODO support padding
         self.blocks.retain(|block| block.block_type() != BlockType::Padding as u8);
 
-        let sort_value = |block: &Block| -> uint {
+        let sort_value = |&: block: &Block| -> uint {
             match *block {
                 StreamInfoBlock(_) => 1,
                 _ => 2,
