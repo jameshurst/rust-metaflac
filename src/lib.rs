@@ -3,12 +3,10 @@
 #![crate_name = "metaflac"]
 #![crate_type = "rlib"]
 
-#![feature(macro_rules)]
-
 #![warn(missing_docs)]
 
-#![feature(phase)]
-#[phase(plugin, link)] extern crate log;
+#[macro_use] 
+extern crate log;
 
 extern crate audiotag; 
 
