@@ -4,6 +4,7 @@
 #![crate_type = "rlib"]
 
 #![warn(missing_docs)]
+#![allow(unstable)]
 
 #[macro_use] 
 extern crate log;

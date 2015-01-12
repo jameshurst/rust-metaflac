@@ -39,7 +39,7 @@ pub enum Block {
     /// A value containing a parsed cuesheet block.
     CueSheetBlock(CueSheet),
     /// A value containing the number of bytes of padding.
-    PaddingBlock(uint),
+    PaddingBlock(usize),
     /// A value containing a parsed picture block.
     PictureBlock(Picture),
     /// A value containing a parsed seektable block.
@@ -63,15 +63,15 @@ impl Block {
             
         let length = header & 0xFF_FF_FF;
 
-        debug!("reading {} bytes for type {} ({})", length, blocktype_opt, blocktype_byte);
+        debug!("reading {} bytes for type {:?} ({})", length, blocktype_opt, blocktype_byte);
 
-        let data = try!(reader.read_exact(length as uint));
+        let data = try!(reader.read_exact(length as usize));
 
         let block = match blocktype_opt {
             Some(blocktype) => {
                 match blocktype {
                     BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(data.as_slice())),
-                    BlockType::Padding => PaddingBlock(length as uint),
+                    BlockType::Padding => PaddingBlock(length as usize),
                     BlockType::Application => ApplicationBlock(Application::from_bytes(data.as_slice())),
                     BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(data.as_slice())),
                     BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(data.as_slice()))),
@@ -82,7 +82,7 @@ impl Block {
             None => UnknownBlock((blocktype_byte, data))
         };
 
-        debug!("{}", block);
+        debug!("{:?}", block);
 
         Ok((is_last, block)) 
     }
@@ -240,7 +240,7 @@ pub struct Application {
 
 impl core::fmt::Show for Application {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "Application {{ id: {}, data: {} }}", self.id.as_slice().to_hex(), self.data)
+        write!(out, "Application {{ id: {}, data: {:?} }}", self.id.as_slice().to_hex(), self.data)
     }
 }
 
@@ -512,7 +512,7 @@ pub struct Picture {
 
 impl core::fmt::Show for Picture {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "Picture {{ picture_type: {}, mime_type: {}, description: {}, width: {}, height: {}, depth: {}, num_colors: {}, data: Vec<u8> ({}) }}", self.picture_type, self.mime_type, self.description, self.width, self.height, self.depth, self.num_colors, self.data.len())
+        write!(out, "Picture {{ picture_type: {:?}, mime_type: {}, description: {}, width: {}, height: {}, depth: {}, num_colors: {}, data: Vec<u8> ({}) }}", self.picture_type, self.mime_type, self.description, self.width, self.height, self.depth, self.num_colors, self.data.len())
     }
 }
 
@@ -541,13 +541,13 @@ impl Picture {
         };
         i += 4;
 
-        let mime_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as uint;
+        let mime_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
         i += 4;
 
         picture.mime_type = try_string!(bytes.slice(i, i + mime_length).to_vec());
         i += mime_length;
 
-        let description_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as uint;
+        let description_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
         i += 4;
 
         picture.description = try_string!(bytes.slice(i, i + description_length).to_vec());
@@ -565,7 +565,7 @@ impl Picture {
         picture.num_colors = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
         i += 4;
 
-        let data_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as uint;
+        let data_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
         i += 4;
 
         picture.data = bytes.slice(i, i + data_length).to_vec();
@@ -714,17 +714,17 @@ impl VorbisComment {
         let mut vorbis = VorbisComment::new();
         let mut i = 0;
 
-        let vendor_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as uint;
+        let vendor_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
         i += 4;
 
         vorbis.vendor_string = try_string!(bytes.slice(i, i + vendor_length).to_vec());
         i += vendor_length;
 
-        let num_comments = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as uint;
+        let num_comments = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
         i += 4;
 
         for _ in range(0, num_comments) {
-            let comment_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as uint;
+            let comment_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
             i += 4;
 
             let comments = try_string!(bytes.slice(i, i + comment_length).to_vec());

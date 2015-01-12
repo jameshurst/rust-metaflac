@@ -73,19 +73,19 @@ impl<'a> FlacTag {
         let mut indices = Vec::new();
         for i in range(0, self.blocks.len()) {
             match *&mut self.blocks[i] {
-                VorbisCommentBlock(_) => indices.push(i as int),
+                VorbisCommentBlock(_) => indices.push(i as isize),
                 _ => {}
             }
         }
 
         if indices.len() == 0 {
             self.blocks.push(VorbisCommentBlock(VorbisComment::new()));
-            indices.push((self.blocks.len() - 1) as int);
+            indices.push((self.blocks.len() - 1) as isize);
         }
 
         let mut all = Vec::new();
         for i in indices.into_iter() {
-            if (i as uint) < self.blocks.len() {
+            if (i as usize) < self.blocks.len() {
                 // TODO find a way to make this safe
                 unsafe {
                     match *self.blocks.as_mut_ptr().offset(i) {
@@ -377,7 +377,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         // TODO support padding
         self.blocks.retain(|block| block.block_type() != BlockType::Padding as u8);
 
-        let sort_value = |&: block: &Block| -> uint {
+        let sort_value = |&: block: &Block| -> usize {
             match *block {
                 StreamInfoBlock(_) => 1,
                 _ => 2,
@@ -389,7 +389,7 @@ impl<'a> AudioTag<'a> for FlacTag {
             let mut list = Vec::with_capacity(self.blocks.len());
             for block in self.blocks.iter() {
                 let blocktype: Option<BlockType> = FromPrimitive::from_u8(block.block_type());
-                list.push(format!("{}", blocktype));
+                list.push(format!("{:?}", blocktype));
             }
             list.as_slice().connect(", ")
         });
