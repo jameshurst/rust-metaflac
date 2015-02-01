@@ -12,13 +12,13 @@ use util;
 use std::ascii::AsciiExt;
 use self::rustc_serialize::hex::ToHex;
 use std::collections::HashMap;
-use std::io::{Reader, Writer};
+use std::old_io::{Reader, Writer};
 use std::iter::repeat;
 use std::num::FromPrimitive;
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[derive(PartialEq, FromPrimitive, Show, Copy)]
+#[derive(PartialEq, FromPrimitive, Debug, Copy)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -30,7 +30,7 @@ pub enum BlockType {
 }
 
 /// The parsed content of a metadata block.
-#[derive(Show)]
+#[derive(Debug)]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
     StreamInfoBlock(StreamInfo),
@@ -70,13 +70,13 @@ impl Block {
         let block = match blocktype_opt {
             Some(blocktype) => {
                 match blocktype {
-                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(data.as_slice())),
+                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(&data[])),
                     BlockType::Padding => PaddingBlock(length as usize),
-                    BlockType::Application => ApplicationBlock(Application::from_bytes(data.as_slice())),
-                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(data.as_slice())),
-                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(data.as_slice()))),
-                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(data.as_slice()))),
-                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(data.as_slice())))
+                    BlockType::Application => ApplicationBlock(Application::from_bytes(&data[])),
+                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(&data[])),
+                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(&data[]))),
+                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(&data[]))),
+                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(&data[]))),
                 }
             },
             None => UnknownBlock((blocktype_byte, data))
@@ -112,7 +112,7 @@ impl Block {
         bytes.extend(util::u64_to_be_bytes(header as u64, 4).into_iter());
         bytes.extend(contents.into_iter());
 
-        try!(writer.write(bytes.as_slice()));
+        try!(writer.write_all(&bytes[]));
 
         Ok(())
     }
@@ -156,9 +156,9 @@ pub struct StreamInfo {
     pub md5: Vec<u8>
 }
 
-impl core::fmt::Show for StreamInfo {
+impl core::fmt::Debug for StreamInfo {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, self.md5.as_slice().to_hex())
+        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, &self.md5[].to_hex())
     }
 }
 
@@ -177,19 +177,19 @@ impl StreamInfo {
         let mut streaminfo = StreamInfo::new();
         let mut i = 0;
 
-        streaminfo.min_block_size = util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u16;
+        streaminfo.min_block_size = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
         i += 2;
 
-        streaminfo.max_block_size = util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u16;
+        streaminfo.max_block_size = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
         i += 2;
 
-        streaminfo.min_frame_size = util::bytes_to_be_u64(bytes.slice(i, i + 3)) as u32;
+        streaminfo.min_frame_size = util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
         i += 3;
 
-        streaminfo.max_frame_size = util::bytes_to_be_u64(bytes.slice(i, i + 3)) as u32;
+        streaminfo.max_frame_size = util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
         i += 3;
 
-        streaminfo.sample_rate = ((util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
+        streaminfo.sample_rate = ((util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
         i += 2;
 
         streaminfo.num_channels = ((bytes[i] & 0x0E) >> 1) + 1;
@@ -197,10 +197,10 @@ impl StreamInfo {
         streaminfo.bits_per_sample = (((bytes[i] & 0x01) << 4) | ((bytes[i + 1] & 0xF0) >> 4)) + 1;
         i += 1;
 
-        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32) | util::bytes_to_be_u64(bytes.slice(i + 1, i + 1 + 4)) as u64;
+        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32) | util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
         i += 5;
 
-        streaminfo.md5 = bytes.slice(i, i + 16).to_vec();
+        streaminfo.md5 = bytes[i..i + 16].to_vec();
 
         streaminfo
     }
@@ -222,7 +222,7 @@ impl StreamInfo {
         bytes.push(byte);
 
         bytes.extend(util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
-        bytes.push_all(self.md5.as_slice());
+        bytes.push_all(&self.md5[]);
 
         bytes
     }
@@ -238,9 +238,9 @@ pub struct Application {
     pub data: Vec<u8>
 }
 
-impl core::fmt::Show for Application {
+impl core::fmt::Debug for Application {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "Application {{ id: {}, data: {:?} }}", self.id.as_slice().to_hex(), self.data)
+        write!(out, "Application {{ id: {}, data: {:?} }}", &self.id[].to_hex(), self.data)
     }
 }
 
@@ -255,10 +255,10 @@ impl Application {
         let mut application = Application::new();
         let mut i = 0;
 
-        application.id = bytes.slice(i, i + 4).to_vec();
+        application.id = bytes[i..i + 4].to_vec();
         i += 4;
 
-        application.data = bytes.slice_from(i).to_vec();
+        application.data = bytes[i..].to_vec();
 
         application 
     } 
@@ -267,8 +267,8 @@ impl Application {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.push_all(self.id.as_slice());
-        bytes.push_all(self.data.as_slice());
+        bytes.push_all(&self.id[]);
+        bytes.push_all(&self.data[]);
 
         bytes
     }
@@ -278,7 +278,7 @@ impl Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[derive(Show, Copy)]
+#[derive(Debug, Copy)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point. 
     pub offset: u64,
@@ -294,7 +294,7 @@ impl CueSheetTrackIndex {
 }
 
 /// A structure representing a cuesheet track.
-#[derive(Show)]
+#[derive(Debug)]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
     /// offset to the first index point of the track. 
@@ -323,7 +323,7 @@ impl CueSheetTrack {
 }
 
 /// A structure representing a CUESHEET block.
-#[derive(Show)]
+#[derive(Debug)]
 pub struct CueSheet {
     /// Media catalog number.
     pub catalog_num: String,
@@ -348,10 +348,10 @@ impl CueSheet {
         let mut cuesheet = CueSheet::new();
         let mut i = 0;
 
-        cuesheet.catalog_num = try_string!(bytes.slice(i, i + 128).to_vec());
+        cuesheet.catalog_num = try_string!(bytes[i..i + 128].to_vec());
         i += 128;
         
-        cuesheet.num_leadin = util::bytes_to_be_u64(bytes.slice(i, i + 8));
+        cuesheet.num_leadin = util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
         let byte = bytes[i];
@@ -367,13 +367,13 @@ impl CueSheet {
         for _ in range(0, num_tracks) {
             let mut track = CueSheetTrack::new();
 
-            track.offset = util::bytes_to_be_u64(bytes.slice(i, i + 8));
+            track.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
             i += 8;
 
             track.number = bytes[i];
             i += 1;
 
-            track.isrc = try_string!(bytes.slice(i, i + 12).to_vec());
+            track.isrc = try_string!(bytes[i..i + 12].to_vec());
             i += 12;
 
             let byte = bytes[i];
@@ -391,7 +391,7 @@ impl CueSheet {
             for _ in range(0, num_indices) {
                 let mut index = CueSheetTrackIndex::new();
 
-                index.offset = util::bytes_to_be_u64(bytes.slice(i, i + 8));
+                index.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
                 i += 8;
 
                 index.point_num = bytes[i];
@@ -463,7 +463,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[derive(FromPrimitive, PartialEq, Show, Copy)]
+#[derive(FromPrimitive, PartialEq, Debug, Copy)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -510,7 +510,7 @@ pub struct Picture {
     pub data: Vec<u8>
 }
 
-impl core::fmt::Show for Picture {
+impl core::fmt::Debug for Picture {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(out, "Picture {{ picture_type: {:?}, mime_type: {}, description: {}, width: {}, height: {}, depth: {}, num_colors: {}, data: Vec<u8> ({}) }}", self.picture_type, self.mime_type, self.description, self.width, self.height, self.depth, self.num_colors, self.data.len())
     }
@@ -531,7 +531,7 @@ impl Picture {
         let mut picture = Picture::new();
         let mut i = 0;
 
-        let picture_type_u32 = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
+        let picture_type_u32 = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         picture.picture_type = match FromPrimitive::from_u32(picture_type_u32) {
             Some(picture_type) => picture_type,
             None => {
@@ -541,34 +541,34 @@ impl Picture {
         };
         i += 4;
 
-        let mime_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
+        let mime_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        picture.mime_type = try_string!(bytes.slice(i, i + mime_length).to_vec());
+        picture.mime_type = try_string!(bytes[i..i + mime_length].to_vec());
         i += mime_length;
 
-        let description_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
+        let description_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        picture.description = try_string!(bytes.slice(i, i + description_length).to_vec());
+        picture.description = try_string!(bytes[i..i + description_length].to_vec());
         i += description_length;
 
-        picture.width = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
+        picture.width = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.height = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
+        picture.height = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.depth = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
+        picture.depth = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.num_colors = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as u32;
+        picture.num_colors = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        let data_length = util::bytes_to_be_u64(bytes.slice(i, i + 4)) as usize;
+        let data_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        picture.data = bytes.slice(i, i + data_length).to_vec();
+        picture.data = bytes[i..i + data_length].to_vec();
 
         Ok(picture)
     }
@@ -604,7 +604,7 @@ impl Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[derive(Show, Copy)]
+#[derive(Debug, Copy)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
@@ -627,13 +627,13 @@ impl SeekPoint {
         let mut seekpoint = SeekPoint::new();
         let mut i = 0;
 
-        seekpoint.sample_number = util::bytes_to_be_u64(bytes.slice(i, i + 8));
+        seekpoint.sample_number = util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
-        seekpoint.offset = util::bytes_to_be_u64(bytes.slice(i, i + 8));
+        seekpoint.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
-        seekpoint.num_samples = util::bytes_to_be_u64(bytes.slice(i, i + 2)) as u16;
+        seekpoint.num_samples = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
 
         seekpoint
     }
@@ -652,7 +652,7 @@ impl SeekPoint {
 //}}}
 
 /// A structure representing a SEEKTABLE block.
-#[derive(Show)]
+#[derive(Debug)]
 pub struct SeekTable {
     /// One or more seek points. 
     pub seekpoints: Vec<SeekPoint>
@@ -671,7 +671,7 @@ impl SeekTable {
 
         let mut i = 0;
         for _ in range(0, num_points) {
-            let seekpoint = SeekPoint::from_bytes(bytes.slice(i, i + 18));
+            let seekpoint = SeekPoint::from_bytes(&bytes[i..i + 18]);
             i += 18;
             seektable.seekpoints.push(seekpoint);
         }
@@ -694,7 +694,7 @@ impl SeekTable {
 
 // VorbisComment {{{
 /// A structure representing a VORBIS_COMMENT block.
-#[derive(Show)]
+#[derive(Debug)]
 pub struct VorbisComment {
     /// The vendor string.
     pub vendor_string: String,
@@ -714,20 +714,20 @@ impl VorbisComment {
         let mut vorbis = VorbisComment::new();
         let mut i = 0;
 
-        let vendor_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
+        let vendor_length = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        vorbis.vendor_string = try_string!(bytes.slice(i, i + vendor_length).to_vec());
+        vorbis.vendor_string = try_string!(bytes[i..i + vendor_length].to_vec());
         i += vendor_length;
 
-        let num_comments = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
+        let num_comments = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
         for _ in range(0, num_comments) {
-            let comment_length = util::bytes_to_le_u64(bytes.slice(i, i + 4)) as usize;
+            let comment_length = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
             i += 4;
 
-            let comments = try_string!(bytes.slice(i, i + comment_length).to_vec());
+            let comments = try_string!(bytes[i..i + comment_length].to_vec());
             i += comment_length;
 
             let comments_split: Vec<&str> = comments.splitn(2, '=').collect();

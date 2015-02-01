@@ -4,7 +4,7 @@ use self::audiotag::{AudioTag, TagError, TagResult, ErrorKind};
 use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
-use std::io::{File, SeekSet, SeekCur, Truncate, Write};
+use std::old_io::{File, SeekSet, SeekCur, Truncate, Write};
 use std::borrow::IntoCow;
 use std::num::FromPrimitive;
 
@@ -122,13 +122,13 @@ impl<'a> FlacTag {
         let mut all = Vec::new();
         for vorbis in self.vorbis_comments().iter() {
             match vorbis.comments.get(key) {
-                Some(list) => all.push_all(list.as_slice()),
+                Some(list) => all.push_all(&list[]),
                 None => {}
             }
         }
 
         if all.len() > 0 {
-            Some(all.as_slice().connect(", "))
+            Some(all[].connect(", "))
         } else {
             None
         }
@@ -242,9 +242,9 @@ impl<'a> FlacTag {
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     /// 
-    /// assert_eq!(tag.pictures()[0].mime_type.as_slice(), "image/jpeg"); 
+    /// assert_eq!(&tag.pictures()[0].mime_type[], "image/jpeg"); 
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
-    /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xFF).as_slice());
+    /// assert_eq!(&tag.pictures()[0].data[], &vec!(0xFF)[]);
     /// ```
     pub fn add_picture<T: IntoCow<'a, String, str>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
@@ -274,9 +274,9 @@ impl<'a> FlacTag {
     /// tag.remove_picture_type(CoverFront);
     /// assert_eq!(tag.pictures().len(), 1);
     ///
-    /// assert_eq!(tag.pictures()[0].mime_type.as_slice(), "image/png"); 
+    /// assert_eq!(&tag.pictures()[0].mime_type[], "image/png"); 
     /// assert_eq!(tag.pictures()[0].picture_type, Other);
-    /// assert_eq!(tag.pictures()[0].data.as_slice(), vec!(0xAB).as_slice());
+    /// assert_eq!(&tag.pictures()[0].data[], &vec!(0xAB)[]);
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         self.blocks.retain(|block: &Block| {
@@ -323,7 +323,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         }
 
         let ident = try_io!(reader, reader.read_exact(4));
-        if ident.as_slice() == b"fLaC" {
+        if &ident[] == b"fLaC" {
             let mut more = true;
             while more {
                 let header = try_io!(reader, reader.read_be_u32());
@@ -351,14 +351,14 @@ impl<'a> AudioTag<'a> for FlacTag {
             }
         }
 
-        (try_or_false!(reader.read_exact(4))).as_slice() == b"fLaC"
+        (&try_or_false!(reader.read_exact(4))[]) == b"fLaC"
     }
 
     fn read_from(reader: &mut Reader) -> TagResult<FlacTag> {
         let mut tag = FlacTag::new();
 
         let ident = try!(reader.read_exact(4));
-        if ident.as_slice() != b"fLaC" {
+        if &ident[] != b"fLaC" {
             return Err(TagError::new(ErrorKind::InvalidInputError, "reader does not contain flac metadata"));
         }
 
@@ -391,10 +391,10 @@ impl<'a> AudioTag<'a> for FlacTag {
                 let blocktype: Option<BlockType> = FromPrimitive::from_u8(block.block_type());
                 list.push(format!("{:?}", blocktype));
             }
-            list.as_slice().connect(", ")
+            list[].connect(", ")
         });
 
-        try!(writer.write(b"fLaC"));
+        try!(writer.write_all(b"fLaC"));
 
         let nblocks = self.blocks.len();
         for i in range(0, nblocks) {
@@ -419,7 +419,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         try!(self.write_to(&mut file));
 
         match data_opt {
-            Some(data) => try!(file.write(data.as_slice())),
+            Some(data) => try!(file.write_all(&data[])),
             None => {}
         }
 
@@ -489,7 +489,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
 
     fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s.as_slice().parse::<u32>())
+        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[].parse::<u32>())
     }
 
     fn set_track(&mut self, track: u32) {
@@ -502,7 +502,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
     
     fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s.as_slice().parse::<u32>())
+        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[].parse::<u32>())
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
@@ -553,7 +553,7 @@ impl<'a> AudioTag<'a> for FlacTag {
 
         for vorbis in self.vorbis_comments().iter() {
             for (key, list) in vorbis.comments.iter() {
-                metadata.push((key.clone(), list.as_slice().connect(", ")));
+                metadata.push((key.clone(), list[].connect(", ")));
             }
         }
         
