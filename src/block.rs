@@ -89,30 +89,66 @@ impl Block {
 
     /// Attemps to write the block to the writer.
     pub fn write_to(&self, is_last: bool, writer: &mut Writer) -> TagResult<()> {
-        let contents = match *self {
-            StreamInfoBlock(ref streaminfo) => streaminfo.to_bytes(),
-            ApplicationBlock(ref application) => application.to_bytes(),
-            CueSheetBlock(ref cuesheet) => cuesheet.to_bytes(),
-            PaddingBlock(_) => Vec::new(),
-            PictureBlock(ref picture) => picture.to_bytes(),
-            SeekTableBlock(ref seektable) => seektable.to_bytes(),
-            VorbisCommentBlock(ref vorbis) => vorbis.to_bytes(),
-            UnknownBlock((_, ref bytes)) => bytes.clone(),
+        let (content_len, contents) = match *self {
+            StreamInfoBlock(ref streaminfo) => {
+                let bytes = streaminfo.to_bytes();
+                (bytes.len(), Some(bytes))
+            },
+            ApplicationBlock(ref application) => {
+                let bytes = application.to_bytes();
+                (bytes.len(), Some(bytes))
+            },
+            CueSheetBlock(ref cuesheet) => {
+                let bytes = cuesheet.to_bytes();
+                (bytes.len(), Some(bytes))
+            },
+            PaddingBlock(size) => {
+                (size, None)
+            },
+            PictureBlock(ref picture) => {
+                let bytes = picture.to_bytes();
+                (bytes.len(), Some(bytes))
+            }
+            SeekTableBlock(ref seektable) => {
+                let bytes = seektable.to_bytes();
+                (bytes.len(), Some(bytes))
+            },
+            VorbisCommentBlock(ref vorbis) => {
+                let bytes = vorbis.to_bytes();
+                (bytes.len(), Some(bytes))
+            },
+            UnknownBlock((_, ref bytes)) => {
+                (bytes.len(), Some(bytes.clone()))
+            },
         }; 
 
-        let mut bytes = Vec::with_capacity(contents.len() + 1);
-        
         let mut header: u32 = 0;
         if is_last {
             header |= 0x80u32 << 24;
         }
         header |= (self.block_type() as u32 & 0x7F) << 24;
-        header |= contents.len() as u32 & 0xFF_FF_FF;
+        header |= content_len as u32 & 0xFF_FF_FF;
 
-        bytes.extend(util::u64_to_be_bytes(header as u64, 4).into_iter());
-        bytes.extend(contents.into_iter());
+        try!(writer.write_all(&util::u64_to_be_bytes(header as u64, 4)[]));
 
-        try!(writer.write_all(&bytes[]));
+        match contents {
+            Some(bytes) => try!(writer.write_all(&bytes[])),
+            None => {
+                let zeroes = [0u8; 1024];
+                let mut remaining = content_len;
+                loop {
+                    if remaining <= zeroes.len() {
+                        debug!("writing {} bytes of padding", remaining);
+                        try!(writer.write_all(&zeroes[..remaining]));
+                        break;
+                    } else {
+                        debug!("writing {} bytes of padding", zeroes.len());
+                        try!(writer.write_all(&zeroes[]));
+                        remaining -= zeroes.len();
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

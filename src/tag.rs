@@ -374,9 +374,6 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
 
     fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
-        // TODO support padding
-        self.blocks.retain(|block| block.block_type() != BlockType::Padding as u8);
-
         let sort_value = |&: block: &Block| -> usize {
             match *block {
                 StreamInfoBlock(_) => 1,
