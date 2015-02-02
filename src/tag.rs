@@ -1,7 +1,7 @@
 extern crate audiotag;
 
 use self::audiotag::{AudioTag, TagError, TagResult, ErrorKind};
-use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock};
+use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock, PaddingBlock};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
 use std::old_io::{File, SeekSet, SeekCur, Truncate, Write};
@@ -377,6 +377,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         let sort_value = |&: block: &Block| -> usize {
             match *block {
                 StreamInfoBlock(_) => 1,
+                PaddingBlock(_) => 3,
                 _ => 2,
             }
         };
