@@ -22,6 +22,88 @@ impl<'a> FlacTag {
         FlacTag { path: None, blocks: Vec::new() }
     }
 
+    /// Aggregates all the padding blocks into one padding block.
+    ///
+    /// # Example
+    /// ```
+    /// use metaflac::{FlacTag, Block, BlockType};
+    ///
+    /// let mut tag = FlacTag::new();
+    /// tag.add_block(Block::PaddingBlock(10));
+    /// tag.add_block(Block::UnknownBlock((20, Vec::new())));
+    /// tag.add_block(Block::PaddingBlock(15));
+    ///
+    /// tag.aggregate_padding();
+    ///
+    /// let padding_blocks = tag.blocks_with_type(BlockType::Padding as u8);
+    /// assert_eq!(padding_blocks.len(), 1);
+    /// if let &Block::PaddingBlock(size) = padding_blocks[0] {
+    ///     assert_eq!(size, 25);
+    /// } else {
+    ///     panic!("block was not padding");
+    /// }
+    /// ```
+    pub fn aggregate_padding(&mut self) {
+        let mut total_padding = 0;
+        for block in self.blocks.iter() {
+            match *block {
+                PaddingBlock(size) => total_padding += size,
+                _ => {}
+            }
+        }
+    
+        self.remove_blocks_with_type(BlockType::Padding as u8);
+        self.add_block(PaddingBlock(total_padding));
+    }
+
+    /// Adds a block to the tag.
+    #[inline]
+    pub fn add_block(&mut self, block: Block) {
+        self.blocks.push(block);
+    }
+
+    /// Returns a reference to the blocks in the tag.
+    #[inline]
+    pub fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+
+    /// Returns a mutable reference to the blocks in the tag.
+    #[inline]
+    pub fn blocks_mut(&mut self) -> &mut Vec<Block> {
+        &mut self.blocks
+    }
+
+    /// Returns references to the blocks with the specified type.
+    pub fn blocks_with_type(&self, block_type: u8) -> Vec<&Block> {
+        let mut out = Vec::new();
+        for block in self.blocks().iter() {
+            if block.block_type() == block_type {
+                out.push(block);
+            }
+        }
+        out
+    }
+
+    /// Removes blocks with the specified type.
+    ///
+    /// # Example
+    /// ```
+    /// use metaflac::{FlacTag, Block, BlockType};
+    ///
+    /// let mut tag = FlacTag::new();
+    /// tag.add_block(Block::PaddingBlock(10));
+    /// tag.add_block(Block::UnknownBlock((20, Vec::new())));
+    /// tag.add_block(Block::PaddingBlock(15));
+    /// 
+    /// tag.remove_blocks_with_type(BlockType::Padding as u8);
+    /// assert_eq!(tag.blocks().len(), 1);
+    /// ```
+    #[inline]
+    pub fn remove_blocks_with_type(&mut self, block_type: u8) {
+        self.blocks.retain(|block: &Block| block.block_type() != block_type);
+    }
+
     /// Returns a vector of references to the vorbis comment blocks.
     /// Returns `None` if no vorbis comment blocks are found.
     ///
@@ -288,8 +370,6 @@ impl<'a> FlacTag {
             }
         });
     }
-
-
 }
 
 impl<'a> AudioTag<'a> for FlacTag {
@@ -374,6 +454,8 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
 
     fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
+        self.aggregate_padding();
+
         let sort_value = |&: block: &Block| -> usize {
             match *block {
                 StreamInfoBlock(_) => 1,

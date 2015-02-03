@@ -178,7 +178,6 @@ pub struct StreamInfo {
     /// The minimum frame size (in bytes) used in the stream.
     pub min_frame_size: u32,
     /// The maximum frame size (in bytes) used in the stream.
-    /// known.
     pub max_frame_size: u32,
     ///Sample rate in Hz. 
     pub sample_rate: u32,
