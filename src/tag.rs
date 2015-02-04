@@ -569,7 +569,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
 
     fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[].parse::<u32>())
+        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[].parse::<u32>().ok())
     }
 
     fn set_track(&mut self, track: u32) {
@@ -582,7 +582,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
     
     fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[].parse::<u32>())
+        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[].parse::<u32>().ok())
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
