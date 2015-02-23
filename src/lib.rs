@@ -4,7 +4,7 @@
 #![crate_type = "rlib"]
 
 #![warn(missing_docs)]
-#![feature(std_misc, core, collections, io)]
+#![feature(core, collections, old_io, old_path)]
 
 #[macro_use] 
 extern crate log;

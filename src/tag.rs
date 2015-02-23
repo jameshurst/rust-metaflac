@@ -204,13 +204,13 @@ impl<'a> FlacTag {
         let mut all = Vec::new();
         for vorbis in self.vorbis_comments().iter() {
             match vorbis.comments.get(key) {
-                Some(list) => all.push_all(&list[]),
+                Some(list) => all.push_all(&list[..]),
                 None => {}
             }
         }
 
         if all.len() > 0 {
-            Some(all[].connect(", "))
+            Some(all[..].connect(", "))
         } else {
             None
         }
@@ -232,7 +232,7 @@ impl<'a> FlacTag {
     ///
     /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
     /// ```
-    pub fn set_vorbis_key<K: IntoCow<'a, String, str>, V: IntoCow<'a, String, str>>(&mut self, key: K, values: Vec<V>) {
+    pub fn set_vorbis_key<K: IntoCow<'a, str>, V: IntoCow<'a, str>>(&mut self, key: K, values: Vec<V>) {
         self.vorbis_comments_mut()[0].comments.insert(key.into_cow().into_owned(), values.into_iter().map(|s| s.into_cow().into_owned()).collect());
     }
 
@@ -324,11 +324,11 @@ impl<'a> FlacTag {
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     /// 
-    /// assert_eq!(&tag.pictures()[0].mime_type[], "image/jpeg"); 
+    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/jpeg"); 
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
-    /// assert_eq!(&tag.pictures()[0].data[], &vec!(0xFF)[]);
+    /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xFF)[..]);
     /// ```
-    pub fn add_picture<T: IntoCow<'a, String, str>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: IntoCow<'a, str>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
@@ -356,9 +356,9 @@ impl<'a> FlacTag {
     /// tag.remove_picture_type(CoverFront);
     /// assert_eq!(tag.pictures().len(), 1);
     ///
-    /// assert_eq!(&tag.pictures()[0].mime_type[], "image/png"); 
+    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/png"); 
     /// assert_eq!(tag.pictures()[0].picture_type, Other);
-    /// assert_eq!(&tag.pictures()[0].data[], &vec!(0xAB)[]);
+    /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xAB)[..]);
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         self.blocks.retain(|block: &Block| {
@@ -403,7 +403,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         }
 
         let ident = try_io!(reader, reader.read_exact(4));
-        if &ident[] == b"fLaC" {
+        if &ident[..] == b"fLaC" {
             let mut more = true;
             while more {
                 let header = try_io!(reader, reader.read_be_u32());
@@ -431,14 +431,14 @@ impl<'a> AudioTag<'a> for FlacTag {
             }
         }
 
-        (&try_or_false!(reader.read_exact(4))[]) == b"fLaC"
+        (&try_or_false!(reader.read_exact(4))[..]) == b"fLaC"
     }
 
     fn read_from(reader: &mut Reader) -> TagResult<FlacTag> {
         let mut tag = FlacTag::new();
 
         let ident = try!(reader.read_exact(4));
-        if &ident[] != b"fLaC" {
+        if &ident[..] != b"fLaC" {
             return Err(TagError::new(ErrorKind::InvalidInputError, "reader does not contain flac metadata"));
         }
 
@@ -471,7 +471,7 @@ impl<'a> AudioTag<'a> for FlacTag {
                 let blocktype: Option<BlockType> = FromPrimitive::from_u8(block.block_type());
                 list.push(format!("{:?}", blocktype));
             }
-            list[].connect(", ")
+            list[..].connect(", ")
         });
 
         try!(writer.write_all(b"fLaC"));
@@ -499,7 +499,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         try!(self.write_to(&mut file));
 
         match data_opt {
-            Some(data) => try!(file.write_all(&data[])),
+            Some(data) => try!(file.write_all(&data[..])),
             None => {}
         }
 
@@ -518,7 +518,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"ARTIST".to_string())
     }
 
-    fn set_artist<T: IntoCow<'a, String, str>>(&mut self, artist: T) {
+    fn set_artist<T: IntoCow<'a, str>>(&mut self, artist: T) {
         self.remove_vorbis_key(&"ARTISTSORT".to_string());
         self.set_vorbis_key("ARTIST", vec!(artist));
     }
@@ -532,7 +532,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"ALBUM".to_string())
     }
 
-    fn set_album<T: IntoCow<'a, String, str>>(&mut self, album: T) {
+    fn set_album<T: IntoCow<'a, str>>(&mut self, album: T) {
         self.remove_vorbis_key(&"ALBUMSORT".to_string());
         self.set_vorbis_key("ALBUM", vec!(album));
     }
@@ -546,7 +546,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"GENRE".to_string())
     }
 
-    fn set_genre<T: IntoCow<'a, String, str>>(&mut self, genre: T) {
+    fn set_genre<T: IntoCow<'a, str>>(&mut self, genre: T) {
         self.set_vorbis_key("GENRE", vec!(genre));
     }
 
@@ -558,7 +558,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"TITLE".to_string())
     }
 
-    fn set_title<T: IntoCow<'a, String, str>>(&mut self, title: T) {
+    fn set_title<T: IntoCow<'a, str>>(&mut self, title: T) {
         self.remove_vorbis_key(&"TITLESORT".to_string());
         self.set_vorbis_key("TITLE", vec!(title));
     }
@@ -569,7 +569,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
 
     fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[].parse::<u32>().ok())
+        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[..].parse::<u32>().ok())
     }
 
     fn set_track(&mut self, track: u32) {
@@ -582,7 +582,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     }
     
     fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[].parse::<u32>().ok())
+        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[..].parse::<u32>().ok())
     }
 
     fn set_total_tracks(&mut self, total_tracks: u32) {
@@ -597,7 +597,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"ALBUMARTIST".to_string())
     }
 
-    fn set_album_artist<T: IntoCow<'a, String, str>>(&mut self, album_artist: T) {
+    fn set_album_artist<T: IntoCow<'a, str>>(&mut self, album_artist: T) {
         self.remove_vorbis_key(&"ALBUMARTISTSORT".to_string());
         self.set_vorbis_key("ALBUMARTIST", vec!(album_artist));
     }
@@ -611,7 +611,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.get_vorbis_key(&"LYRICS".to_string())
     }
 
-    fn set_lyrics<T: IntoCow<'a, String, str>>(&mut self, lyrics: T) {
+    fn set_lyrics<T: IntoCow<'a, str>>(&mut self, lyrics: T) {
         self.set_vorbis_key("LYRICS", vec!(lyrics));
     }
 
@@ -619,7 +619,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         self.remove_vorbis_key(&"LYRICS".to_string());
     }
 
-    fn set_picture<T: IntoCow<'a, String, str>>(&mut self, mime_type: T, data: Vec<u8>) {
+    fn set_picture<T: IntoCow<'a, str>>(&mut self, mime_type: T, data: Vec<u8>) {
         self.remove_picture();
         self.add_picture(mime_type, PictureType::Other, data);
     }
@@ -633,7 +633,7 @@ impl<'a> AudioTag<'a> for FlacTag {
 
         for vorbis in self.vorbis_comments().iter() {
             for (key, list) in vorbis.comments.iter() {
-                metadata.push((key.clone(), list[].connect(", ")));
+                metadata.push((key.clone(), list[..].connect(", ")));
             }
         }
         

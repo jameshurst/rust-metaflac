@@ -70,13 +70,13 @@ impl Block {
         let block = match blocktype_opt {
             Some(blocktype) => {
                 match blocktype {
-                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(&data[])),
+                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(&data[..])),
                     BlockType::Padding => PaddingBlock(length as usize),
-                    BlockType::Application => ApplicationBlock(Application::from_bytes(&data[])),
-                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(&data[])),
-                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(&data[]))),
-                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(&data[]))),
-                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(&data[]))),
+                    BlockType::Application => ApplicationBlock(Application::from_bytes(&data[..])),
+                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(&data[..])),
+                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(&data[..]))),
+                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(&data[..]))),
+                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(&data[..]))),
                 }
             },
             None => UnknownBlock((blocktype_byte, data))
@@ -129,10 +129,10 @@ impl Block {
         header |= (self.block_type() as u32 & 0x7F) << 24;
         header |= content_len as u32 & 0xFF_FF_FF;
 
-        try!(writer.write_all(&util::u64_to_be_bytes(header as u64, 4)[]));
+        try!(writer.write_all(&util::u64_to_be_bytes(header as u64, 4)[..]));
 
         match contents {
-            Some(bytes) => try!(writer.write_all(&bytes[])),
+            Some(bytes) => try!(writer.write_all(&bytes[..])),
             None => {
                 let zeroes = [0u8; 1024];
                 let mut remaining = content_len;
@@ -143,7 +143,7 @@ impl Block {
                         break;
                     } else {
                         debug!("writing {} bytes of padding", zeroes.len());
-                        try!(writer.write_all(&zeroes[]));
+                        try!(writer.write_all(&zeroes[..]));
                         remaining -= zeroes.len();
                     }
                 }
@@ -193,7 +193,7 @@ pub struct StreamInfo {
 
 impl core::fmt::Debug for StreamInfo {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, &self.md5[].to_hex())
+        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, &self.md5[..].to_hex())
     }
 }
 
@@ -257,7 +257,7 @@ impl StreamInfo {
         bytes.push(byte);
 
         bytes.extend(util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
-        bytes.push_all(&self.md5[]);
+        bytes.push_all(&self.md5[..]);
 
         bytes
     }
@@ -275,7 +275,7 @@ pub struct Application {
 
 impl core::fmt::Debug for Application {
     fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(out, "Application {{ id: {}, data: {:?} }}", &self.id[].to_hex(), self.data)
+        write!(out, "Application {{ id: {}, data: {:?} }}", &self.id[..].to_hex(), self.data)
     }
 }
 
@@ -302,8 +302,8 @@ impl Application {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.push_all(&self.id[]);
-        bytes.push_all(&self.data[]);
+        bytes.push_all(&self.id[..]);
+        bytes.push_all(&self.data[..]);
 
         bytes
     }
