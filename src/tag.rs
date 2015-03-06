@@ -456,7 +456,7 @@ impl<'a> AudioTag<'a> for FlacTag {
     fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
         self.aggregate_padding();
 
-        let sort_value = |&: block: &Block| -> usize {
+        let sort_value = |block: &Block| -> usize {
             match *block {
                 StreamInfoBlock(_) => 1,
                 PaddingBlock(_) => 3,
