@@ -4,7 +4,8 @@ use self::audiotag::{AudioTag, TagError, TagResult, ErrorKind};
 use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock, PaddingBlock};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
 
-use std::old_io::{File, SeekSet, SeekCur, Truncate, Write};
+use std::old_path::Path;
+use std::old_io::{File, SeekSet, SeekCur, Truncate, Write, Reader, Writer, Seek};
 use std::borrow::IntoCow;
 use std::num::FromPrimitive;
 
@@ -153,7 +154,7 @@ impl<'a> FlacTag {
     /// ```
     pub fn vorbis_comments_mut(&mut self) -> Vec<&mut VorbisComment> {
         let mut indices = Vec::new();
-        for i in range(0, self.blocks.len()) {
+        for i in 0..self.blocks.len() {
             match *&mut self.blocks[i] {
                 VorbisCommentBlock(_) => indices.push(i as isize),
                 _ => {}
@@ -477,7 +478,7 @@ impl<'a> AudioTag<'a> for FlacTag {
         try!(writer.write_all(b"fLaC"));
 
         let nblocks = self.blocks.len();
-        for i in range(0, nblocks) {
+        for i in 0..nblocks {
             let block = &self.blocks[i];
             try!(block.write_to(i == nblocks - 1, writer));
         }

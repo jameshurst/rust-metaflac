@@ -399,7 +399,7 @@ impl CueSheet {
         let num_tracks = bytes[i];
         i += 1;
 
-        for _ in range(0, num_tracks) {
+        for _ in 0..num_tracks {
             let mut track = CueSheetTrack::new();
 
             track.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
@@ -423,7 +423,7 @@ impl CueSheet {
             let num_indices = bytes[i];
             i += 1;
 
-            for _ in range(0, num_indices) {
+            for _ in 0..num_indices {
                 let mut index = CueSheetTrackIndex::new();
 
                 index.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
@@ -705,7 +705,7 @@ impl SeekTable {
         let num_points = bytes.len() / 18;
 
         let mut i = 0;
-        for _ in range(0, num_points) {
+        for _ in 0..num_points {
             let seekpoint = SeekPoint::from_bytes(&bytes[i..i + 18]);
             i += 18;
             seektable.seekpoints.push(seekpoint);
@@ -758,7 +758,7 @@ impl VorbisComment {
         let num_comments = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        for _ in range(0, num_comments) {
+        for _ in 0..num_comments {
             let comment_length = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
             i += 4;
 
