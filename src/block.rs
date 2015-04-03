@@ -1,5 +1,5 @@
 extern crate core;
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 extern crate audiotag;
 
 use self::audiotag::{TagError, TagResult, ErrorKind};
@@ -18,7 +18,7 @@ use std::num::FromPrimitive;
 
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[derive(PartialEq, FromPrimitive, Debug, Copy)]
+#[derive(PartialEq, FromPrimitive, Debug, Copy, Clone)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -313,7 +313,7 @@ impl Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, Clone)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point. 
     pub offset: u64,
@@ -498,7 +498,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[derive(FromPrimitive, PartialEq, Debug, Copy)]
+#[derive(FromPrimitive, PartialEq, Debug, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -639,7 +639,7 @@ impl Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, Clone)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
