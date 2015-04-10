@@ -1,8 +1,10 @@
-#rust-metaflac [![Build Status](https://travis-ci.org/jamesrhurst/rust-metaflac.svg)](https://travis-ci.org/jamesrhurst/rust-metaflac)
+#rust-metaflac 
 
-A FLAC metadata reader/writer. The `FlacTag` struct implements the [AudioTag](https://github.com/jamesrhurst/rust-audiotag) trait for reading, writing, and modification of common metadata elements.
+[![Build Status](https://travis-ci.org/jamesrhurst/rust-metaflac.svg)](https://travis-ci.org/jamesrhurst/rust-metaflac)
 
-Documentation is available via Rust CI at [http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/](http://www.rust-ci.org/jamesrhurst/rust-metaflac/doc/metaflac/).
+A library for reading and writing FLAC metadata.
+
+[Documentation](http://jamesrhurst.github.io/rust-metaflac/)
 
 ##Usage
 
@@ -16,18 +18,13 @@ git = "https://github.com/jamesrhurst/rust-metaflac"
 ```rust
 extern crate metaflac;
 
-use metaflac::{AudioTag, FlacTag};
+use metaflac::Tag;
 
 fn main() {
-	let tag = AudioTag::read_from_path(&Path::new("music.flac")).unwrap();
+	let tag = Tag::read_from_path("music.flac").unwrap();
 
 	// Some things modifying the tag
 
 	tag.save().unwrap();
 }
 ```
-
-##TODO
-
-  * Writing to padding
-  * Add tests

@@ -1,65 +1,41 @@
-extern crate audiotag;
+extern crate byteorder;
+extern crate libc;
 
-use self::audiotag::{AudioTag, TagError, TagResult, ErrorKind};
-use block::Block::{StreamInfoBlock, PictureBlock, VorbisCommentBlock, PaddingBlock};
-use block::{Block, BlockType, Picture, PictureType, VorbisComment}; 
+use self::byteorder::{ReadBytesExt, BigEndian};
 
-use std::old_path::Path;
-use std::old_io::{File, SeekSet, SeekCur, Truncate, Write, Reader, Writer, Seek};
-use std::borrow::IntoCow;
-use std::num::FromPrimitive;
+use block::{Block, BlockType, Picture, PictureType, VorbisComment};
+use error::{Result, Error, ErrorKind};
 
-/// A structure representing a flac metadata tag.
-pub struct FlacTag {
-    /// The path from which the blocks were loaded.
-    path: Option<Path>,
-    /// The metadata blocks contained in this tag.
-    blocks: Vec<Block>,
+use std::path::{Path, PathBuf};
+use std::io::{self, Read, Write, Seek, SeekFrom};
+use std::fs::{self, File, OpenOptions};
+
+use std::ptr;
+use std::ffi;
+use self::libc::{c_char, L_tmpnam};
+extern {
+    pub fn tmpnam(s: *mut c_char) -> *const c_char;
 }
 
-impl<'a> FlacTag {
-    /// Creates a new FLAC tag with no blocks.
-    pub fn new() -> FlacTag {
-        FlacTag { path: None, blocks: Vec::new() }
-    }
+/// A structure representing a flac metadata tag.
+pub struct Tag {
+    /// The path from which the blocks were loaded.
+    path: Option<PathBuf>,
+    /// The metadata blocks contained in this tag.
+    blocks: Vec<Block>,
+    /// The size of the metadata when the file was read.
+    length: u32,
+}
 
-    /// Aggregates all the padding blocks into one padding block.
-    ///
-    /// # Example
-    /// ```
-    /// use metaflac::{FlacTag, Block, BlockType};
-    ///
-    /// let mut tag = FlacTag::new();
-    /// tag.add_block(Block::PaddingBlock(10));
-    /// tag.add_block(Block::UnknownBlock((20, Vec::new())));
-    /// tag.add_block(Block::PaddingBlock(15));
-    ///
-    /// tag.aggregate_padding();
-    ///
-    /// let padding_blocks = tag.blocks_with_type(BlockType::Padding as u8);
-    /// assert_eq!(padding_blocks.len(), 1);
-    /// if let &Block::PaddingBlock(size) = padding_blocks[0] {
-    ///     assert_eq!(size, 25);
-    /// } else {
-    ///     panic!("block was not padding");
-    /// }
-    /// ```
-    pub fn aggregate_padding(&mut self) {
-        let mut total_padding = 0;
-        for block in self.blocks.iter() {
-            match *block {
-                PaddingBlock(size) => total_padding += size,
-                _ => {}
-            }
-        }
-    
-        self.remove_blocks_with_type(BlockType::Padding as u8);
-        self.add_block(PaddingBlock(total_padding));
+impl Tag {
+    /// Creates a new FLAC tag with no blocks.
+    pub fn new() -> Tag {
+        Tag { path: None, blocks: Vec::new(), length: 0 }
     }
 
     /// Adds a block to the tag.
     #[inline]
-    pub fn add_block(&mut self, block: Block) {
+    pub fn push_block(&mut self, block: Block) {
         self.blocks.push(block);
     }
 
@@ -69,14 +45,8 @@ impl<'a> FlacTag {
         &self.blocks
     }
 
-    /// Returns a mutable reference to the blocks in the tag.
-    #[inline]
-    pub fn blocks_mut(&mut self) -> &mut Vec<Block> {
-        &mut self.blocks
-    }
-
     /// Returns references to the blocks with the specified type.
-    pub fn blocks_with_type(&self, block_type: u8) -> Vec<&Block> {
+    pub fn get_blocks(&self, block_type: BlockType) -> Vec<&Block> {
         let mut out = Vec::new();
         for block in self.blocks().iter() {
             if block.block_type() == block_type {
@@ -90,19 +60,19 @@ impl<'a> FlacTag {
     ///
     /// # Example
     /// ```
-    /// use metaflac::{FlacTag, Block, BlockType};
+    /// use metaflac::{Tag, Block, BlockType};
     ///
-    /// let mut tag = FlacTag::new();
-    /// tag.add_block(Block::PaddingBlock(10));
-    /// tag.add_block(Block::UnknownBlock((20, Vec::new())));
-    /// tag.add_block(Block::PaddingBlock(15));
+    /// let mut tag = Tag::new();
+    /// tag.push_block(Block::Padding(10));
+    /// tag.push_block(Block::Unknown((20, Vec::new())));
+    /// tag.push_block(Block::Padding(15));
     /// 
-    /// tag.remove_blocks_with_type(BlockType::Padding as u8);
+    /// tag.remove_blocks(BlockType::Padding);
     /// assert_eq!(tag.blocks().len(), 1);
     /// ```
     #[inline]
-    pub fn remove_blocks_with_type(&mut self, block_type: u8) {
-        self.blocks.retain(|block: &Block| block.block_type() != block_type);
+    pub fn remove_blocks(&mut self, block_type: BlockType) {
+        self.blocks.retain(|b| b.block_type() != block_type);
     }
 
     /// Returns a vector of references to the vorbis comment blocks.
@@ -110,25 +80,24 @@ impl<'a> FlacTag {
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
-    /// assert_eq!(tag.vorbis_comments().len(), 0);
+    /// let mut tag = Tag::new();
+    /// assert!(tag.vorbis_comments().is_none());
     ///
-    /// tag.set_vorbis_key("key", vec!("value"));
+    /// tag.set_vorbis("key", vec!("value"));
     ///
-    /// assert_eq!(tag.vorbis_comments().len(), 1);
+    /// assert!(tag.vorbis_comments().is_some());
     /// ```
-    pub fn vorbis_comments(&self) -> Vec<&VorbisComment> {
-        let mut all = Vec::new();
+    pub fn vorbis_comments(&self) -> Option<&VorbisComment> {
         for block in self.blocks.iter() {
             match *block {
-                VorbisCommentBlock(ref vorbis) => all.push(vorbis),
+                Block::VorbisComment(ref comm) => return Some(comm),
                 _ => {}
             }
         }
 
-        all 
+        None
     }
 
     /// Returns a vector of mutable references to the vorbis comment blocks.
@@ -137,49 +106,33 @@ impl<'a> FlacTag {
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
-    /// assert_eq!(tag.vorbis_comments().len(), 0);
+    /// let mut tag = Tag::new();
+    /// assert!(tag.vorbis_comments().is_none());
     ///
     /// let key = "key".to_string();
     /// let value1 = "value1".to_string();
     /// let value2 = "value2".to_string();
     ///
-    /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
+    /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone())); 
     ///
-    /// assert_eq!(tag.vorbis_comments().len(), 1);
-    /// assert!(tag.vorbis_comments()[0].comments.get(&key).is_some());
+    /// assert!(tag.vorbis_comments().is_some());
+    /// assert!(tag.vorbis_comments().unwrap().comments.get(&key).is_some());
     /// ```
-    pub fn vorbis_comments_mut(&mut self) -> Vec<&mut VorbisComment> {
-        let mut indices = Vec::new();
+    pub fn vorbis_comments_mut(&mut self) -> &mut VorbisComment {
         for i in 0..self.blocks.len() {
-            match *&mut self.blocks[i] {
-                VorbisCommentBlock(_) => indices.push(i as isize),
-                _ => {}
-            }
-        }
-
-        if indices.len() == 0 {
-            self.blocks.push(VorbisCommentBlock(VorbisComment::new()));
-            indices.push((self.blocks.len() - 1) as isize);
-        }
-
-        let mut all = Vec::new();
-        for i in indices.into_iter() {
-            if (i as usize) < self.blocks.len() {
-                // TODO find a way to make this safe
-                unsafe {
-                    match *self.blocks.as_mut_ptr().offset(i) {
-                        VorbisCommentBlock(ref mut vorbis) => all.push(vorbis),
-                        _ => {}
-                    };
+            unsafe {
+                match *self.blocks.as_mut_ptr().offset(i as isize) {
+                    Block::VorbisComment(ref mut comm) => return comm,
+                    _ => {}
                 }
             }
         }
-
-        all
+        
+        self.push_block(Block::VorbisComment(VorbisComment::new()));
+        self.vorbis_comments_mut()
     }
 
     /// Returns a comma separated string of values for the specified vorbis comment key.
@@ -188,114 +141,99 @@ impl<'a> FlacTag {
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     ///
     /// let key = "key".to_string();
     /// let value1 = "value1".to_string();
     /// let value2 = "value2".to_string();
     ///
-    /// tag.vorbis_comments_mut()[0].comments.insert(key.clone(), vec!(value1.clone(),
+    /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone()));
     ///
-    /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
+    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
-    pub fn get_vorbis_key(&self, key: &String) -> Option<String> {
-        let mut all = Vec::new();
-        for vorbis in self.vorbis_comments().iter() {
-            match vorbis.comments.get(key) {
-                Some(list) => all.push_all(&list[..]),
-                None => {}
-            }
-        }
-
-        if all.len() > 0 {
-            Some(all[..].connect(", "))
-        } else {
-            None
-        }
+    pub fn get_vorbis(&self, key: &str) -> Option<&Vec<String>> {
+        self.vorbis_comments().and_then(|c| c.get(key))
     }
 
     /// Sets the values for the specified vorbis comment key.
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     ///
     /// let key = "key".to_string();
     /// let value1 = "value1".to_string();
     /// let value2 = "value2".to_string();
     ///
-    /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
+    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     ///
-    /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
+    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
-    pub fn set_vorbis_key<K: IntoCow<'a, str>, V: IntoCow<'a, str>>(&mut self, key: K, values: Vec<V>) {
-        self.vorbis_comments_mut()[0].comments.insert(key.into_cow().into_owned(), values.into_iter().map(|s| s.into_cow().into_owned()).collect());
+    #[inline]
+    pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
+        self.vorbis_comments_mut().set(key, values);
     }
 
     /// Removes the values for the specified vorbis comment key.
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     ///
     /// let key = "key".to_string();
     /// let value1 = "value1".to_string();
     /// let value2 = "value2".to_string();
     ///
-    /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone())); 
-    /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
+    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..])); 
+    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     ///
-    /// tag.remove_vorbis_key(&key);
-    /// assert!(tag.get_vorbis_key(&key).is_none());
+    /// tag.remove_vorbis(&key);
+    /// assert!(tag.get_vorbis(&key).is_none());
     /// ```
-    pub fn remove_vorbis_key(&mut self, key: &String) {
-        for vorbis in self.vorbis_comments_mut().iter_mut() {
-            vorbis.comments.remove(key);
-        }
+    #[inline]
+    pub fn remove_vorbis(&mut self, key: &str) {
+        self.vorbis_comments_mut().comments.remove(key);
     }
 
     /// Removes the vorbis comments with the specified key and value.
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
+    /// use metaflac::Tag;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     ///
     /// let key = "key".to_string();
     /// let value1 = "value1".to_string();
     /// let value2 = "value2".to_string();
     ///
-    /// tag.set_vorbis_key(key.clone(), vec!(value1.clone(), value2.clone()));
-    /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), format!("{}, {}", value1, value2));
+    /// tag.set_vorbis(key.clone(), vec!(&value1[..], &value2[..]));
+    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     ///
-    /// tag.remove_vorbis_key_value(&key, &value1);
-    /// assert_eq!(tag.get_vorbis_key(&key).unwrap(), value2);
+    /// tag.remove_vorbis_pair(&key, &value1);
+    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value2[..]]);
     /// ```
-    pub fn remove_vorbis_key_value(&mut self, key: &String, value: &String) {
-        for vorbis in self.vorbis_comments_mut().iter_mut() {
-            match vorbis.comments.get_mut(key) {
-                Some(list) => list.retain(|s| s != value),
-                None => continue 
-            }
-        }
+    #[inline]
+    pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
+        self.vorbis_comments_mut().remove_pair(key, value);
+
     }
 
     /// Returns a vector of references to the pictures in the tag.
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
-    /// use metaflac::PictureType::CoverFront;
+    /// use metaflac::Tag;
+    /// use metaflac::block::PictureType::CoverFront;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
@@ -306,7 +244,7 @@ impl<'a> FlacTag {
         let mut pictures = Vec::new();
         for block in self.blocks.iter() {
             match *block {
-                PictureBlock(ref picture) => pictures.push(picture),
+                Block::Picture(ref picture) => pictures.push(picture),
                 _ => {}
             }
         }
@@ -317,10 +255,10 @@ impl<'a> FlacTag {
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
-    /// use metaflac::PictureType::CoverFront;
+    /// use metaflac::Tag;
+    /// use metaflac::block::PictureType::CoverFront;
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
@@ -329,25 +267,25 @@ impl<'a> FlacTag {
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xFF)[..]);
     /// ```
-    pub fn add_picture<T: IntoCow<'a, str>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: Into<String>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
-        picture.mime_type = mime_type.into_cow().into_owned();
+        picture.mime_type = mime_type.into();
         picture.picture_type = picture_type;
         picture.data = data;
 
-        self.blocks.push(PictureBlock(picture));
+        self.push_block(Block::Picture(picture));
     }
 
     /// Removes the picture with the specified picture type.
     ///
     /// # Example
     /// ```
-    /// use metaflac::FlacTag;
-    /// use metaflac::PictureType::{CoverFront, Other};
+    /// use metaflac::Tag;
+    /// use metaflac::block::PictureType::{CoverFront, Other};
     ///
-    /// let mut tag = FlacTag::new();
+    /// let mut tag = Tag::new();
     /// assert_eq!(tag.pictures().len(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
@@ -364,35 +302,35 @@ impl<'a> FlacTag {
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         self.blocks.retain(|block: &Block| {
             match *block {
-                PictureBlock(ref picture) => {
-                    picture.picture_type != picture_type
-                },
+                Block::Picture(ref picture) => picture.picture_type != picture_type,
                 _ => true
             }
         });
     }
-}
 
-impl<'a> AudioTag<'a> for FlacTag {
-    fn save(&mut self) -> TagResult<()> {
+    /// Attempts to save the tag back to the file which it was read from. An `Error::InvalidInput`
+    /// will be returned if this is called on a tag which was not read from a file.
+    pub fn save(&mut self) -> ::Result<()> {
         if self.path.is_none() {
-            panic!("attempted to save metadata which was not read from a file");
+            return Err(::Error::new(::ErrorKind::InvalidInput, "attempted to save file which was not read from a path"))
         }
 
         let path = self.path.clone().unwrap();
         self.write_to_path(&path)
     }
 
-    fn skip_metadata<R: Reader + Seek>(reader: &mut R, _: Option<FlacTag>) -> Vec<u8> {
+    /// Returns the contents of the reader without any FLAC metadata.
+    pub fn skip_metadata<R: Read + Seek>(reader: &mut R) -> Vec<u8> {
         macro_rules! try_io {
             ($reader:ident, $action:expr) => {
                 match $action { 
                     Ok(bytes) => bytes, 
                     Err(_) => {
-                        match $reader.seek(0, SeekSet) {
+                        match $reader.seek(SeekFrom::Start(0)) {
                             Ok(_) => {
-                                match $reader.read_to_end() {
-                                    Ok(bytes) => return bytes,
+                                let mut data = Vec::new();
+                                match $reader.read_to_end(&mut data) {
+                                    Ok(_) => return data,
                                     Err(_) => return Vec::new()
                                 }
                             },
@@ -403,26 +341,31 @@ impl<'a> AudioTag<'a> for FlacTag {
             }
         }
 
-        let ident = try_io!(reader, reader.read_exact(4));
+        let mut ident = [0; 4];
+        try_io!(reader, reader.read(&mut ident));
         if &ident[..] == b"fLaC" {
             let mut more = true;
             while more {
-                let header = try_io!(reader, reader.read_be_u32());
+                let header = try_io!(reader, reader.read_u32::<BigEndian>());
                 
                 more = ((header >> 24) & 0x80) == 0;
                 let length = header & 0xFF_FF_FF;
 
                 debug!("skipping {} bytes", length);
-                try_io!(reader, reader.seek(length as i64, SeekCur));
+                try_io!(reader, reader.seek(SeekFrom::Current(length as i64)));
             }
         } else {
-            try_io!(reader, reader.seek(0, SeekSet));
+            try_io!(reader, reader.seek(SeekFrom::Start(0)));
         }
 
-        try_io!(reader, reader.read_to_end())
+        let mut data = Vec::new();
+        try_io!(reader, reader.read_to_end(&mut data));
+        data
     }
 
-    fn is_candidate(reader: &mut Reader, _: Option<FlacTag>) -> bool {
+    /// Will return true if the reader is a candidate for FLAC metadata. The reader position will be
+    /// reset back to the previous position before returning.
+    pub fn is_candidate<R: Read + Seek>(reader: &mut R) -> bool {
         macro_rules! try_or_false {
             ($action:expr) => {
                 match $action { 
@@ -432,19 +375,25 @@ impl<'a> AudioTag<'a> for FlacTag {
             }
         }
 
-        (&try_or_false!(reader.read_exact(4))[..]) == b"fLaC"
+        let mut ident = [0; 4];
+        try_or_false!(reader.read(&mut ident));
+        let _ = reader.seek(SeekFrom::Current(-4));
+        &ident[..] == b"fLaC"
     }
 
-    fn read_from(reader: &mut Reader) -> TagResult<FlacTag> {
-        let mut tag = FlacTag::new();
+    /// Attempts to read a FLAC tag from the reader.
+    pub fn read_from(reader: &mut Read) -> Result<Tag> {
+        let mut tag = Tag::new();
 
-        let ident = try!(reader.read_exact(4));
+        let mut ident = [0; 4];
+        try!(reader.read(&mut ident));
         if &ident[..] != b"fLaC" {
-            return Err(TagError::new(ErrorKind::InvalidInputError, "reader does not contain flac metadata"));
+            return Err(Error::new(ErrorKind::InvalidInput, "reader does not contain flac metadata"));
         }
 
         loop {
-            let (is_last, block) = try!(Block::read_from(reader));
+            let (is_last, length, block) = try!(Block::read_from(reader));
+            tag.length += length;
             tag.blocks.push(block);
             if is_last {
                 break;
@@ -454,192 +403,102 @@ impl<'a> AudioTag<'a> for FlacTag {
         Ok(tag)
     }
 
-    fn write_to(&mut self, writer: &mut Writer) -> TagResult<()> {
-        self.aggregate_padding();
-
-        let sort_value = |block: &Block| -> usize {
-            match *block {
-                StreamInfoBlock(_) => 1,
-                PaddingBlock(_) => 3,
-                _ => 2,
-            }
-        };
-
-        self.blocks.sort_by(|a, b| sort_value(a).cmp(&(sort_value(b))));
-        debug!("sorted blocks: {}", {
-            let mut list = Vec::with_capacity(self.blocks.len());
-            for block in self.blocks.iter() {
-                let blocktype: Option<BlockType> = FromPrimitive::from_u8(block.block_type());
-                list.push(format!("{:?}", blocktype));
-            }
-            list[..].connect(", ")
-        });
-
-        try!(writer.write_all(b"fLaC"));
+    /// Attempts to write the FLAC tag to the wrier.
+    pub fn write_to(&mut self, writer: &mut Write) -> Result<()> {
+        try!(writer.write(b"fLaC"));
 
         let nblocks = self.blocks.len();
+        self.length = 0;
         for i in 0..nblocks {
             let block = &self.blocks[i];
-            try!(block.write_to(i == nblocks - 1, writer));
+            self.length += try!(block.write_to(i == nblocks - 1, writer));
         }
 
         Ok(())
     }
 
-    fn write_to_path(&mut self, path: &Path) -> TagResult<()> {
-        self.path = Some(path.clone());
+    /// Attempts to write the FLAC tag to a file at the indicated path. If the specified path is
+    /// the same path which the tag was read from, then the tag will be written to the padding if
+    /// possible.
+    pub fn write_to_path<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        self.remove_blocks(BlockType::Padding);
 
-        let data_opt = {
-            match File::open(path) {
-                Ok(mut file) => Some(AudioTag::skip_metadata(&mut file, None::<FlacTag>)),
-                Err(_) => None
+        let mut block_bytes = Vec::new();
+        let nblocks = self.blocks.len();
+        let mut new_length = 0;
+        for i in 0..nblocks {
+            let block = &self.blocks[i];
+            let mut writer = Vec::<u8>::new();
+            new_length += try!(block.write_to(false, &mut writer));
+            block_bytes.push(writer);
+        }
+
+        // write using padding
+        if self.path.is_some() && path.as_ref() == self.path.as_ref().unwrap().as_path() && new_length + 4 <= self.length {
+            debug!("writing using padding");
+            let mut file = try!(OpenOptions::new().write(true).open(self.path.as_ref().unwrap()));
+            try!(file.seek(SeekFrom::Start(4)));
+
+            for bytes in block_bytes.iter() {
+                try!(file.write(&bytes[..]));
             }
-        };
-        
-        let mut file = try!(File::open_mode(path, Truncate, Write));
-        try!(self.write_to(&mut file));
 
-        match data_opt {
-            Some(data) => try!(file.write_all(&data[..])),
-            None => {}
+            debug!("{} bytes of padding", self.length - new_length - 4);
+            let padding = Block::Padding(self.length - new_length - 4);
+            try!(padding.write_to(true, &mut file));
+            self.push_block(padding);
+        } else { // write by copying file data
+            debug!("writing to new file");
+
+            let data_opt = {
+                match File::open(&path) {
+                    Ok(mut file) => Some(Tag::skip_metadata(&mut file)),
+                    Err(_) => None
+                }
+            };
+
+            let tmp_name = unsafe {
+                let mut c_buf: [c_char; L_tmpnam as usize + 1] = [0; L_tmpnam as usize + 1];
+                let ret = tmpnam(c_buf.as_mut_ptr());
+                if ret == ptr::null() {
+                    return Err(Error::from(io::Error::new(io::ErrorKind::Other, "failed to create temporary file")))
+                }
+                try!(String::from_utf8(ffi::CStr::from_ptr(c_buf.as_ptr()).to_bytes().to_vec()))
+            };
+            debug!("writing to temporary file: {}", tmp_name);
+
+            let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&tmp_name[..]));
+
+            try!(file.write(b"fLaC"));
+
+            for bytes in block_bytes.iter() {
+                try!(file.write(&bytes[..]));
+            }
+
+            let padding_size = 1024;
+            debug!("adding {} bytes of padding", padding_size);
+            let padding = Block::Padding(padding_size);
+            new_length += try!(padding.write_to(true, &mut file));
+            self.push_block(padding);
+
+            match data_opt {
+                Some(data) => try!(file.write_all(&data[..])),
+                None => {}
+            }
+
+            try!(fs::rename(tmp_name, &path));
         }
 
+        self.length = new_length;
+        self.path = Some(path.as_ref().to_path_buf());
         Ok(())
     }
 
-    fn read_from_path(path: &Path) -> TagResult<FlacTag> {
-        let mut file = try!(File::open(path));
-        let mut tag: FlacTag = try!(AudioTag::read_from(&mut file));
-        tag.path = Some(path.clone());
+    /// Attempts to read a FLAC tag from the file at the specified path.
+    pub fn read_from_path<P: AsRef<Path>>(path: P) -> Result<Tag> {
+        let mut file = try!(File::open(&path));
+        let mut tag = try!(Tag::read_from(&mut file));
+        tag.path = Some(path.as_ref().to_path_buf());
         Ok(tag)
     }
-
-    // Getters/Setters {{{
-    fn artist(&self) -> Option<String> {
-        self.get_vorbis_key(&"ARTIST".to_string())
-    }
-
-    fn set_artist<T: IntoCow<'a, str>>(&mut self, artist: T) {
-        self.remove_vorbis_key(&"ARTISTSORT".to_string());
-        self.set_vorbis_key("ARTIST", vec!(artist));
-    }
-
-    fn remove_artist(&mut self) {
-        self.remove_vorbis_key(&"ARTISTSORT".to_string());
-        self.remove_vorbis_key(&"ARTIST".to_string());
-    }
-
-    fn album(&self) -> Option<String> {
-        self.get_vorbis_key(&"ALBUM".to_string())
-    }
-
-    fn set_album<T: IntoCow<'a, str>>(&mut self, album: T) {
-        self.remove_vorbis_key(&"ALBUMSORT".to_string());
-        self.set_vorbis_key("ALBUM", vec!(album));
-    }
-
-    fn remove_album(&mut self) {
-        self.remove_vorbis_key(&"ALBUMSORT".to_string());
-        self.remove_vorbis_key(&"ALBUM".to_string());
-    }
-    
-    fn genre(&self) -> Option<String> {
-        self.get_vorbis_key(&"GENRE".to_string())
-    }
-
-    fn set_genre<T: IntoCow<'a, str>>(&mut self, genre: T) {
-        self.set_vorbis_key("GENRE", vec!(genre));
-    }
-
-    fn remove_genre(&mut self) {
-        self.remove_vorbis_key(&"GENRE".to_string());
-    }
-
-    fn title(&self) -> Option<String> {
-        self.get_vorbis_key(&"TITLE".to_string())
-    }
-
-    fn set_title<T: IntoCow<'a, str>>(&mut self, title: T) {
-        self.remove_vorbis_key(&"TITLESORT".to_string());
-        self.set_vorbis_key("TITLE", vec!(title));
-    }
-
-    fn remove_title(&mut self) {
-        self.remove_vorbis_key(&"TITLESORT".to_string());
-        self.remove_vorbis_key(&"TITLE".to_string());
-    }
-
-    fn track(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TRACKNUMBER".to_string()).and_then(|s| s[..].parse::<u32>().ok())
-    }
-
-    fn set_track(&mut self, track: u32) {
-        self.set_vorbis_key("TRACKNUMBER", vec!(format!("{}", track)));
-    }
-
-    fn remove_track(&mut self) {
-        self.remove_vorbis_key(&"TRACKNUMBER".to_string());
-        self.remove_vorbis_key(&"TOTALTRACKS".to_string());
-    }
-    
-    fn total_tracks(&self) -> Option<u32> {
-        self.get_vorbis_key(&"TOTALTRACKS".to_string()).and_then(|s| s[..].parse::<u32>().ok())
-    }
-
-    fn set_total_tracks(&mut self, total_tracks: u32) {
-        self.set_vorbis_key("TOTALTRACKS", vec!(format!("{}", total_tracks)));
-    }
-
-    fn remove_total_tracks(&mut self) {
-        self.remove_vorbis_key(&"TOTALTRACKS".to_string());
-    }
-    
-    fn album_artist(&self) -> Option<String> {
-        self.get_vorbis_key(&"ALBUMARTIST".to_string())
-    }
-
-    fn set_album_artist<T: IntoCow<'a, str>>(&mut self, album_artist: T) {
-        self.remove_vorbis_key(&"ALBUMARTISTSORT".to_string());
-        self.set_vorbis_key("ALBUMARTIST", vec!(album_artist));
-    }
-
-    fn remove_album_artist(&mut self) {
-        self.remove_vorbis_key(&"ALBUMARTISTSORT".to_string());
-        self.remove_vorbis_key(&"ALBUMARTIST".to_string());
-    }
-
-    fn lyrics(&self) -> Option<String> {
-        self.get_vorbis_key(&"LYRICS".to_string())
-    }
-
-    fn set_lyrics<T: IntoCow<'a, str>>(&mut self, lyrics: T) {
-        self.set_vorbis_key("LYRICS", vec!(lyrics));
-    }
-
-    fn remove_lyrics(&mut self) {
-        self.remove_vorbis_key(&"LYRICS".to_string());
-    }
-
-    fn set_picture<T: IntoCow<'a, str>>(&mut self, mime_type: T, data: Vec<u8>) {
-        self.remove_picture();
-        self.add_picture(mime_type, PictureType::Other, data);
-    }
-
-    fn remove_picture(&mut self) {
-        self.blocks.retain(|block| block.block_type() != BlockType::Picture as u8);
-    }
-
-    fn all_metadata(&self) -> Vec<(String, String)> {
-        let mut metadata = Vec::new();
-
-        for vorbis in self.vorbis_comments().iter() {
-            for (key, list) in vorbis.comments.iter() {
-                metadata.push((key.clone(), list[..].connect(", ")));
-            }
-        }
-        
-        metadata
-    }
-    //}}}
 }
-

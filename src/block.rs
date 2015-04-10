@@ -1,24 +1,22 @@
-extern crate core;
 extern crate rustc_serialize;
-extern crate audiotag;
+extern crate byteorder;
+extern crate num;
 
-use self::audiotag::{TagError, TagResult, ErrorKind};
-use self::Block::{
-    StreamInfoBlock, ApplicationBlock, CueSheetBlock, PaddingBlock, PictureBlock,
-    SeekTableBlock, VorbisCommentBlock, UnknownBlock
-};
-use util;
+use error::{Result, Error, ErrorKind};
+
+use self::byteorder::{ReadBytesExt, BigEndian};
+use self::num::{FromPrimitive, ToPrimitive};
+use self::rustc_serialize::hex::ToHex;
 
 use std::ascii::AsciiExt;
-use self::rustc_serialize::hex::ToHex;
 use std::collections::HashMap;
-use std::old_io::{Reader, Writer};
+use std::io::{Read, Write};
 use std::iter::repeat;
-use std::num::FromPrimitive;
 
+// BlockType {{{
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[derive(PartialEq, FromPrimitive, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -26,99 +24,138 @@ pub enum BlockType {
     SeekTable,
     VorbisComment,
     CueSheet,
-    Picture
+    Picture,
+    Unknown(u8),
 }
+
+#[allow(missing_docs)]
+impl ToPrimitive for BlockType {
+    fn to_i64(&self) -> Option<i64> {
+        self.to_u64().and_then(|n| Some(n as i64))
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        Some(match *self {
+            BlockType::StreamInfo => 0,
+            BlockType::Padding => 1,
+            BlockType::Application => 2,
+            BlockType::SeekTable => 3,
+            BlockType::VorbisComment => 4,
+            BlockType::CueSheet => 5,
+            BlockType::Picture => 6,
+            BlockType::Unknown(n) => n as u64
+        })
+    }
+}
+
+#[allow(missing_docs)]
+impl FromPrimitive for BlockType {
+    fn from_i64(n: i64) -> Option<BlockType> {
+        FromPrimitive::from_u64(n as u64)
+    }
+
+    fn from_u64(n: u64) -> Option<BlockType> {
+        Some(match n {
+            0 => BlockType::StreamInfo,
+            1 => BlockType::Padding,
+            2 => BlockType::Application,
+            3 => BlockType::SeekTable,
+            4 => BlockType::VorbisComment,
+            5 => BlockType::CueSheet,
+            6 => BlockType::Picture,
+            n => BlockType::Unknown(n as u8)
+        })
+    }
+}
+// }}}
 
 /// The parsed content of a metadata block.
 #[derive(Debug)]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
-    StreamInfoBlock(StreamInfo),
+    StreamInfo(StreamInfo),
     /// A value containing a parsed application block.
-    ApplicationBlock(Application),
+    Application(Application),
     /// A value containing a parsed cuesheet block.
-    CueSheetBlock(CueSheet),
+    CueSheet(CueSheet),
     /// A value containing the number of bytes of padding.
-    PaddingBlock(usize),
+    Padding(u32),
     /// A value containing a parsed picture block.
-    PictureBlock(Picture),
+    Picture(Picture),
     /// A value containing a parsed seektable block.
-    SeekTableBlock(SeekTable),
+    SeekTable(SeekTable),
     /// A value containing a parsed vorbis comment block.
-    VorbisCommentBlock(VorbisComment),
+    VorbisComment(VorbisComment),
     /// An value containing the bytes of an unknown block.
-    UnknownBlock((u8, Vec<u8>))
+    Unknown((u8, Vec<u8>))
 }
 
 impl Block {
     /// Attempts to read a block from the reader. Returns a tuple containing a boolean indicating
-    /// if the block was the last block, and the new `Block`.
-    pub fn read_from(reader: &mut Reader) -> TagResult<(bool, Block)> {
-        let header = try!(reader.read_be_u32());
+    /// if the block was the last block, the length of the block in bytes, and the new `Block`.
+    pub fn read_from(reader: &mut Read) -> Result<(bool, u32, Block)> {
+        let header = try!(reader.read_u32::<BigEndian>());
 
         let is_last = ((header >> 24) & 0x80) != 0;
 
         let blocktype_byte = (header >> 24) as u8 & 0x7F;
-        let blocktype_opt: Option<BlockType> = FromPrimitive::from_u8(blocktype_byte);
+        let blocktype = BlockType::from_u8(blocktype_byte).unwrap();
             
         let length = header & 0xFF_FF_FF;
 
-        debug!("reading {} bytes for type {:?} ({})", length, blocktype_opt, blocktype_byte);
+        debug!("reading {} bytes for type {:?} ({})", length, blocktype, blocktype_byte);
 
-        let data = try!(reader.read_exact(length as usize));
+        let mut data = Vec::new();
+        reader.take(length as u64).read_to_end(&mut data).unwrap();
 
-        let block = match blocktype_opt {
-            Some(blocktype) => {
-                match blocktype {
-                    BlockType::StreamInfo => StreamInfoBlock(StreamInfo::from_bytes(&data[..])),
-                    BlockType::Padding => PaddingBlock(length as usize),
-                    BlockType::Application => ApplicationBlock(Application::from_bytes(&data[..])),
-                    BlockType::SeekTable => SeekTableBlock(SeekTable::from_bytes(&data[..])),
-                    BlockType::VorbisComment => VorbisCommentBlock(try!(VorbisComment::from_bytes(&data[..]))),
-                    BlockType::Picture => PictureBlock(try!(Picture::from_bytes(&data[..]))),
-                    BlockType::CueSheet => CueSheetBlock(try!(CueSheet::from_bytes(&data[..]))),
-                }
-            },
-            None => UnknownBlock((blocktype_byte, data))
+        let block = match blocktype {
+            BlockType::StreamInfo => Block::StreamInfo(StreamInfo::from_bytes(&data[..])),
+            BlockType::Padding => Block::Padding(length),
+            BlockType::Application => Block::Application(Application::from_bytes(&data[..])),
+            BlockType::SeekTable => Block::SeekTable(SeekTable::from_bytes(&data[..])),
+            BlockType::VorbisComment => Block::VorbisComment(try!(VorbisComment::from_bytes(&data[..]))),
+            BlockType::Picture => Block::Picture(try!(Picture::from_bytes(&data[..]))),
+            BlockType::CueSheet => Block::CueSheet(try!(CueSheet::from_bytes(&data[..]))),
+            BlockType::Unknown(_) => Block::Unknown((blocktype_byte, data))
         };
 
         debug!("{:?}", block);
 
-        Ok((is_last, block)) 
+        Ok((is_last, length + 4, block)) 
     }
 
-    /// Attemps to write the block to the writer.
-    pub fn write_to(&self, is_last: bool, writer: &mut Writer) -> TagResult<()> {
+    /// Attemps to write the block to the writer. Returns the length of the block in bytes.
+    pub fn write_to(&self, is_last: bool, writer: &mut Write) -> Result<u32> {
         let (content_len, contents) = match *self {
-            StreamInfoBlock(ref streaminfo) => {
+            Block::StreamInfo(ref streaminfo) => {
                 let bytes = streaminfo.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             },
-            ApplicationBlock(ref application) => {
+            Block::Application(ref application) => {
                 let bytes = application.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             },
-            CueSheetBlock(ref cuesheet) => {
+            Block::CueSheet(ref cuesheet) => {
                 let bytes = cuesheet.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             },
-            PaddingBlock(size) => {
+            Block::Padding(size) => {
                 (size, None)
             },
-            PictureBlock(ref picture) => {
+            Block::Picture(ref picture) => {
                 let bytes = picture.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             }
-            SeekTableBlock(ref seektable) => {
+            Block::SeekTable(ref seektable) => {
                 let bytes = seektable.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             },
-            VorbisCommentBlock(ref vorbis) => {
+            Block::VorbisComment(ref vorbis) => {
                 let bytes = vorbis.to_bytes();
-                (bytes.len(), Some(bytes))
+                (bytes.len() as u32, Some(bytes))
             },
-            UnknownBlock((_, ref bytes)) => {
-                (bytes.len(), Some(bytes.clone()))
+            Block::Unknown((_, ref bytes)) => {
+                (bytes.len() as u32, Some(bytes.clone()))
             },
         }; 
 
@@ -126,16 +163,16 @@ impl Block {
         if is_last {
             header |= 0x80u32 << 24;
         }
-        header |= (self.block_type() as u32 & 0x7F) << 24;
-        header |= content_len as u32 & 0xFF_FF_FF;
+        header |= (self.block_type().to_u32().unwrap() & 0x7F) << 24;
+        header |= content_len & 0xFF_FF_FF;
 
-        try!(writer.write_all(&util::u64_to_be_bytes(header as u64, 4)[..]));
+        try!(writer.write_all(&::util::u64_to_be_bytes(header as u64, 4)[..]));
 
         match contents {
             Some(bytes) => try!(writer.write_all(&bytes[..])),
             None => {
                 let zeroes = [0u8; 1024];
-                let mut remaining = content_len;
+                let mut remaining = content_len as usize;
                 loop {
                     if remaining <= zeroes.len() {
                         debug!("writing {} bytes of padding", remaining);
@@ -150,20 +187,20 @@ impl Block {
             }
         }
 
-        Ok(())
+        Ok(content_len + 4)
     }
 
     /// Returns the corresponding block type byte for the block.
-    pub fn block_type(&self) -> u8 {
+    pub fn block_type(&self) -> BlockType {
         match *self {
-            StreamInfoBlock(_) => BlockType::StreamInfo as u8,
-            ApplicationBlock(_) => BlockType::Application as u8,
-            CueSheetBlock(_) => BlockType::CueSheet as u8,
-            PaddingBlock(_) => BlockType::Padding as u8,
-            PictureBlock(_) => BlockType::Picture as u8,
-            SeekTableBlock(_) => BlockType::SeekTable as u8,
-            VorbisCommentBlock(_) => BlockType::VorbisComment as u8,
-            UnknownBlock((blocktype, _)) => blocktype
+            Block::StreamInfo(_) => BlockType::StreamInfo,
+            Block::Application(_) => BlockType::Application,
+            Block::CueSheet(_) => BlockType::CueSheet,
+            Block::Padding(_) => BlockType::Padding,
+            Block::Picture(_) => BlockType::Picture,
+            Block::SeekTable(_) => BlockType::SeekTable,
+            Block::VorbisComment(_) => BlockType::VorbisComment,
+            Block::Unknown((blocktype, _)) => BlockType::Unknown(blocktype),
         }
     }
 }
@@ -191,8 +228,8 @@ pub struct StreamInfo {
     pub md5: Vec<u8>
 }
 
-impl core::fmt::Debug for StreamInfo {
-    fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl ::std::fmt::Debug for StreamInfo {
+    fn fmt(&self, out: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, &self.md5[..].to_hex())
     }
 }
@@ -207,24 +244,24 @@ impl StreamInfo {
         }
     }
 
-    /// Parses the bytes as a streaminfo block. 
+    /// Parses the bytes as a StreamInfo block. 
     pub fn from_bytes(bytes: &[u8]) -> StreamInfo {
         let mut streaminfo = StreamInfo::new();
         let mut i = 0;
 
-        streaminfo.min_block_size = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        streaminfo.min_block_size = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
         i += 2;
 
-        streaminfo.max_block_size = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        streaminfo.max_block_size = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
         i += 2;
 
-        streaminfo.min_frame_size = util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
+        streaminfo.min_frame_size = ::util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
         i += 3;
 
-        streaminfo.max_frame_size = util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
+        streaminfo.max_frame_size = ::util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
         i += 3;
 
-        streaminfo.sample_rate = ((util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
+        streaminfo.sample_rate = ((::util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
         i += 2;
 
         streaminfo.num_channels = ((bytes[i] & 0x0E) >> 1) + 1;
@@ -232,7 +269,7 @@ impl StreamInfo {
         streaminfo.bits_per_sample = (((bytes[i] & 0x01) << 4) | ((bytes[i + 1] & 0xF0) >> 4)) + 1;
         i += 1;
 
-        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32) | util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
+        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32) | ::util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
         i += 5;
 
         streaminfo.md5 = bytes[i..i + 16].to_vec();
@@ -244,11 +281,11 @@ impl StreamInfo {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(util::u64_to_be_bytes(self.min_block_size as u64, 2).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.max_block_size as u64, 2).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.min_frame_size as u64, 3).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.max_frame_size as u64, 3).into_iter());
-        bytes.extend(util::u64_to_be_bytes((self.sample_rate >> 4) as u64, 2).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.min_block_size as u64, 2).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.max_block_size as u64, 2).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.min_frame_size as u64, 3).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.max_frame_size as u64, 3).into_iter());
+        bytes.extend(::util::u64_to_be_bytes((self.sample_rate >> 4) as u64, 2).into_iter());
 
         let byte = ((self.sample_rate << 4) & 0xF0) as u8 | (((self.num_channels - 1) << 1) & 0x0E) as u8 | (((self.bits_per_sample - 1) >> 4) & 0x01) as u8;
         bytes.push(byte);
@@ -256,8 +293,8 @@ impl StreamInfo {
         let byte = (((self.bits_per_sample - 1) << 4) & 0xF0) as u8 | ((self.total_samples >> 32) & 0x0F) as u8;
         bytes.push(byte);
 
-        bytes.extend(util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
-        bytes.push_all(&self.md5[..]);
+        bytes.extend(::util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
+        bytes.extend(self.md5.iter().cloned());
 
         bytes
     }
@@ -273,8 +310,8 @@ pub struct Application {
     pub data: Vec<u8>
 }
 
-impl core::fmt::Debug for Application {
-    fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl ::std::fmt::Debug for Application {
+    fn fmt(&self, out: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(out, "Application {{ id: {}, data: {:?} }}", &self.id[..].to_hex(), self.data)
     }
 }
@@ -302,8 +339,8 @@ impl Application {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.push_all(&self.id[..]);
-        bytes.push_all(&self.data[..]);
+        bytes.extend(self.id.iter().cloned());
+        bytes.extend(self.data.iter().cloned());
 
         bytes
     }
@@ -379,14 +416,14 @@ impl CueSheet {
     }
 
     /// Parses the bytes as a cuesheet block. 
-    pub fn from_bytes(bytes: &[u8]) -> TagResult<CueSheet> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<CueSheet> {
         let mut cuesheet = CueSheet::new();
         let mut i = 0;
 
-        cuesheet.catalog_num = try_string!(bytes[i..i + 128].to_vec());
+        cuesheet.catalog_num = try!(String::from_utf8(bytes[i..i + 128].to_vec()));
         i += 128;
         
-        cuesheet.num_leadin = util::bytes_to_be_u64(&bytes[i..i + 8]);
+        cuesheet.num_leadin = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
         let byte = bytes[i];
@@ -402,13 +439,13 @@ impl CueSheet {
         for _ in 0..num_tracks {
             let mut track = CueSheetTrack::new();
 
-            track.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
+            track.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
             i += 8;
 
             track.number = bytes[i];
             i += 1;
 
-            track.isrc = try_string!(bytes[i..i + 12].to_vec());
+            track.isrc = try!(String::from_utf8(bytes[i..i + 12].to_vec()));
             i += 12;
 
             let byte = bytes[i];
@@ -426,7 +463,7 @@ impl CueSheet {
             for _ in 0..num_indices {
                 let mut index = CueSheetTrackIndex::new();
 
-                index.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
+                index.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
                 i += 8;
 
                 index.point_num = bytes[i];
@@ -451,13 +488,13 @@ impl CueSheet {
 
         bytes.extend(self.catalog_num.clone().into_bytes().into_iter());
         bytes.extend(repeat(0).take(128 - self.catalog_num.len()).collect::<Vec<u8>>().into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.num_leadin, 8).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.num_leadin, 8).into_iter());
 
         if self.is_cd {
             bytes.push(0x80);
         }
 
-        bytes.push_all(&[0; 258]);
+        bytes.extend([0; 258].iter().cloned());
 
         bytes.push(self.tracks.len() as u8);
 
@@ -465,7 +502,7 @@ impl CueSheet {
 
             assert!(track.isrc.len() <= 12);
 
-            bytes.extend(util::u64_to_be_bytes(track.offset, 8).into_iter());
+            bytes.extend(::util::u64_to_be_bytes(track.offset, 8).into_iter());
             bytes.push(track.number);
             bytes.extend(track.isrc.clone().into_bytes().into_iter());
             bytes.extend(repeat(0).take(12 - track.isrc.len()).collect::<Vec<u8>>().into_iter());
@@ -479,14 +516,14 @@ impl CueSheet {
             }
             bytes.push(byte);
 
-            bytes.push_all(&[0; 13]);
+            bytes.extend([0; 13].iter().cloned());
 
             bytes.push(track.indices.len() as u8);
 
             for index in track.indices.iter() {
-                bytes.extend(util::u64_to_be_bytes(index.offset, 8).into_iter());
+                bytes.extend(::util::u64_to_be_bytes(index.offset, 8).into_iter());
                 bytes.push(index.point_num);
-                bytes.push_all(&[0; 3]);
+                bytes.extend([0; 3].iter().cloned());
             }
         }
 
@@ -498,7 +535,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[derive(FromPrimitive, PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -524,6 +561,39 @@ pub enum PictureType {
     PublisherLogo
 }
 
+impl FromPrimitive for PictureType {
+    fn from_i64(n: i64) -> Option<PictureType> {
+        FromPrimitive::from_u64(n as u64)
+    }
+
+    fn from_u64(n: u64) -> Option<PictureType> {
+        match n {
+            0 => Some(PictureType::Other),
+            1 => Some(PictureType::Icon),
+            2 => Some(PictureType::OtherIcon),
+            3 => Some(PictureType::CoverFront),
+            4 => Some(PictureType::CoverBack),
+            5 => Some(PictureType::Leaflet),
+            6 => Some(PictureType::Media),
+            7 => Some(PictureType::LeadArtist),
+            8 => Some(PictureType::Artist),
+            9 => Some(PictureType::Conductor),
+            10 => Some(PictureType::Band),
+            11 => Some(PictureType::Composer),
+            12 => Some(PictureType::Lyricist),
+            13 => Some(PictureType::RecordingLocation),
+            14 => Some(PictureType::DuringRecording),
+            15 => Some(PictureType::DuringPerformance),
+            16 => Some(PictureType::ScreenCapture),
+            17 => Some(PictureType::BrightFish),
+            18 => Some(PictureType::Illustration),
+            19 => Some(PictureType::BandLogo),
+            20 => Some(PictureType::PublisherLogo),
+            _ => None,
+        }
+    }
+}
+
 /// A structure representing a PICTURE block.
 pub struct Picture {
     /// The picture type.
@@ -545,8 +615,8 @@ pub struct Picture {
     pub data: Vec<u8>
 }
 
-impl core::fmt::Debug for Picture {
-    fn fmt(&self, out: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl ::std::fmt::Debug for Picture {
+    fn fmt(&self, out: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(out, "Picture {{ picture_type: {:?}, mime_type: {}, description: {}, width: {}, height: {}, depth: {}, num_colors: {}, data: Vec<u8> ({}) }}", self.picture_type, self.mime_type, self.description, self.width, self.height, self.depth, self.num_colors, self.data.len())
     }
 }
@@ -562,45 +632,45 @@ impl Picture {
     }
 
     /// Attempts to parse the bytes as a `Picture` block. Returns a `Picture` on success.
-    pub fn from_bytes(bytes: &[u8]) -> TagResult<Picture> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Picture> {
         let mut picture = Picture::new();
         let mut i = 0;
 
-        let picture_type_u32 = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
-        picture.picture_type = match FromPrimitive::from_u32(picture_type_u32) {
+        let picture_type_u32 = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.picture_type = match PictureType::from_u32(picture_type_u32) {
             Some(picture_type) => picture_type,
             None => {
                 debug!("encountered invalid picture type: {}", picture_type_u32);
-                return Err(TagError::new(ErrorKind::InvalidInputError, "invalid picture type"))
+                return Err(Error::new(ErrorKind::InvalidInput, "invalid picture type"))
             }
         };
         i += 4;
 
-        let mime_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let mime_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        picture.mime_type = try_string!(bytes[i..i + mime_length].to_vec());
+        picture.mime_type = try!(String::from_utf8(bytes[i..i + mime_length].to_vec()));
         i += mime_length;
 
-        let description_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let description_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        picture.description = try_string!(bytes[i..i + description_length].to_vec());
+        picture.description = try!(String::from_utf8(bytes[i..i + description_length].to_vec()));
         i += description_length;
 
-        picture.width = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.width = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.height = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.height = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.depth = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.depth = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        picture.num_colors = util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.num_colors = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
         i += 4;
 
-        let data_length = util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let data_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
         picture.data = bytes[i..i + data_length].to_vec();
@@ -612,23 +682,23 @@ impl Picture {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(util::u64_to_be_bytes(self.picture_type as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.picture_type as u64, 4).into_iter());
 
         let mime_type = self.mime_type.clone().into_bytes();
-        bytes.extend(util::u64_to_be_bytes(mime_type.len() as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(mime_type.len() as u64, 4).into_iter());
         bytes.extend(mime_type.into_iter());
 
         let description = self.description.clone().into_bytes();
-        bytes.extend(util::u64_to_be_bytes(description.len() as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(description.len() as u64, 4).into_iter());
         bytes.extend(description.into_iter());
 
-        bytes.extend(util::u64_to_be_bytes(self.width as u64, 4).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.height as u64, 4).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.depth as u64, 4).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.num_colors as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.width as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.height as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.depth as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.num_colors as u64, 4).into_iter());
 
         let data = self.data.clone();
-        bytes.extend(util::u64_to_be_bytes(data.len() as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(data.len() as u64, 4).into_iter());
         bytes.extend(data.into_iter());
 
         bytes
@@ -662,13 +732,13 @@ impl SeekPoint {
         let mut seekpoint = SeekPoint::new();
         let mut i = 0;
 
-        seekpoint.sample_number = util::bytes_to_be_u64(&bytes[i..i + 8]);
+        seekpoint.sample_number = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
-        seekpoint.offset = util::bytes_to_be_u64(&bytes[i..i + 8]);
+        seekpoint.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
-        seekpoint.num_samples = util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        seekpoint.num_samples = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
 
         seekpoint
     }
@@ -677,9 +747,9 @@ impl SeekPoint {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(util::u64_to_be_bytes(self.sample_number, 8).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.offset , 8).into_iter());
-        bytes.extend(util::u64_to_be_bytes(self.num_samples as u64 , 2).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.sample_number, 8).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.offset , 8).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.num_samples as u64 , 2).into_iter());
 
         bytes
     }
@@ -734,7 +804,7 @@ pub struct VorbisComment {
     /// The vendor string.
     pub vendor_string: String,
     /// A map of keys to a list of their values.
-    pub comments: HashMap<String, Vec<String>>
+    pub comments: HashMap<String, Vec<String>>,
 }
 
 impl VorbisComment {
@@ -745,29 +815,29 @@ impl VorbisComment {
 
     /// Attempts to parse the bytes as a vorbis comment block. Returns a `VorbisComment` on
     /// success.
-    pub fn from_bytes(bytes: &[u8]) -> TagResult<VorbisComment> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<VorbisComment> {
         let mut vorbis = VorbisComment::new();
         let mut i = 0;
 
-        let vendor_length = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+        let vendor_length = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
-        vorbis.vendor_string = try_string!(bytes[i..i + vendor_length].to_vec());
+        vorbis.vendor_string = try!(String::from_utf8(bytes[i..i + vendor_length].to_vec()));
         i += vendor_length;
 
-        let num_comments = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+        let num_comments = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
         i += 4;
 
         for _ in 0..num_comments {
-            let comment_length = util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+            let comment_length = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
             i += 4;
 
-            let comments = try_string!(bytes[i..i + comment_length].to_vec());
+            let comments = try!(String::from_utf8(bytes[i..i + comment_length].to_vec()));
             i += comment_length;
 
             let comments_split: Vec<&str> = comments.splitn(2, '=').collect();
             let key = comments_split[0].to_ascii_uppercase();
-            let value = String::from_str(comments_split[1]);
+            let value = comments_split[1].to_string();
 
             if vorbis.comments.contains_key(&key) {
                 vorbis.comments.get_mut(&key).unwrap().push(value);
@@ -785,20 +855,226 @@ impl VorbisComment {
 
         let vendor_string = self.vendor_string.clone().into_bytes();
 
-        bytes.extend(util::u64_to_le_bytes(vendor_string.len() as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_le_bytes(vendor_string.len() as u64, 4).into_iter());
         bytes.extend(vendor_string.into_iter());
         
-        bytes.extend(util::u64_to_le_bytes(self.comments.len() as u64, 4).into_iter());
+        bytes.extend(::util::u64_to_le_bytes(self.comments.len() as u64, 4).into_iter());
 
         for (key, list) in self.comments.iter() {
             for value in list.iter() {
                 let comment = format!("{}={}", key, value).into_bytes();
-                bytes.extend(util::u64_to_le_bytes(comment.len() as u64, 4).into_iter());
+                bytes.extend(::util::u64_to_le_bytes(comment.len() as u64, 4).into_iter());
                 bytes.extend(comment.into_iter());
             }
         }
 
         bytes
     }
+
+    /// Returns a reference to the vector of comments for the specified key.
+    #[inline]
+    pub fn get(&self, key: &str) -> Option<&Vec<String>> {
+        self.comments.get(key)
+    }
+
+    /// Sets the comments for the specified key. Any previous values under the key will be removed.
+    #[inline]
+    pub fn set<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
+        let key_owned = key.into();
+        self.remove(&key_owned[..]);
+        self.comments.insert(key_owned, values.into_iter().map(|s| s.into()).collect());
+    }
+
+    /// Removes the comments for the specified key.
+    #[inline]
+    pub fn remove(&mut self, key: &str) {
+        self.comments.remove(key);
+    }
+
+    /// Removes any matching key/value pairs.
+    pub fn remove_pair(&mut self, key: &str, value: &str) { 
+        match self.comments.get_mut(key) {
+            Some(list) => list.retain(|s| &s[..] != value),
+            None => {} 
+        }
+
+        let mut num_values = 0;
+        if let Some(values) = self.get(key) {
+            num_values = values.len();
+        }
+        if num_values == 0 {
+            self.remove(key)
+        }
+    }
+
+    // Getters/Setters {{{
+    /// Returns a reference to the vector of values with the ARTIST key.
+    #[inline]
+    pub fn artist(&self) -> Option<&Vec<String>> {
+        self.get("ARTIST")
+    }
+
+    /// Sets the values for the ARTIST key. This will result in any ARTISTSORT comment being
+    /// removed.
+    #[inline]
+    pub fn set_artist<T: Into<String>>(&mut self, artists: Vec<T>) {
+        self.remove("ARTISTSORT");
+        self.set("ARTIST", artists);
+    }
+    
+    /// Removes all values with the ARTIST key. This will result in any ARTISTSORT comments being
+    /// removed as well.
+    #[inline]
+    pub fn remove_artist(&mut self) {
+        self.remove("ARTISTSORT");
+        self.remove("ARTIST");
+    }
+
+    /// Returns a reference to the vector of values with the ALBUM key.
+    #[inline]
+    pub fn album(&self) -> Option<&Vec<String>> {
+        self.get("ALBUM")
+    }
+
+    /// Sets the values for the ALBUM key. This will result in any ALBUMSORT comments being
+    /// removed.
+    #[inline]
+    pub fn set_album<T: Into<String>>(&mut self, albums: Vec<T>) {
+        self.remove("ALBUMSORT");
+        self.set("ALBUM", albums);
+    }
+
+    /// Removes all values with the ALBUM key. This will result in any ALBUMSORT comments being
+    /// removed as well.
+    #[inline]
+    pub fn remove_album(&mut self) {
+        self.remove("ALBUMSORT");
+        self.remove("ALBUM");
+    }
+   
+    /// Returns a reference to the vector of values with the GENRE key.
+    #[inline]
+    pub fn genre(&self) -> Option<&Vec<String>> {
+        self.get("GENRE")
+    }
+
+    /// Sets the values for the GENRE key.
+    #[inline]
+    pub fn set_genre<T: Into<String>>(&mut self, genres: Vec<T>) {
+        self.set("GENRE", genres);
+    }
+
+    /// Removes all values with the GENRE key.
+    #[inline]
+    pub fn remove_genre(&mut self) {
+        self.remove("GENRE");
+    }
+
+    /// Returns reference to the vector of values with the TITLE key.
+    #[inline]
+    pub fn title(&self) -> Option<&Vec<String>> {
+        self.get("TITLE")
+    }
+
+    /// Sets the values for the TITLE key. This will result in any TITLESORT comments being
+    /// removed.
+    #[inline]
+    pub fn set_title<T: Into<String>>(&mut self, title: Vec<T>) {
+        self.remove("TITLESORT");
+        self.set("TITLE", title);
+    }
+
+    /// Removes all values with the TITLE key. This will result in any TITLESORT comments being
+    /// removed as well.
+    #[inline]
+    pub fn remove_title(&mut self) {
+        self.remove("TITLESORT");
+        self.remove("TITLE");
+    }
+
+    /// Attempts to convert the first TRACKNUMBER comment to a `u32`.
+    #[inline]
+    pub fn track(&self) -> Option<u32> {
+        self.get("TRACKNUMBER").and_then(|s| if s.len() > 0 {
+            s[0].parse::<u32>().ok()
+        } else {
+            None
+        })
+    }
+
+    /// Sets the TRACKNUMBER comment.
+    #[inline]
+    pub fn set_track(&mut self, track: u32) {
+        self.set("TRACKNUMBER", vec!(format!("{}", track)));
+    }
+
+    /// Removes all values with the TRACKNUMBER key.
+    #[inline]
+    pub fn remove_track(&mut self) {
+        self.remove("TRACKNUMBER");
+    }
+    
+    /// Attempts to convert the first TOTALTRACKS comment to a `u32`.
+    #[inline]
+    pub fn total_tracks(&self) -> Option<u32> {
+        self.get("TOTALTRACKS").and_then(|s| if s.len() > 0 {
+            s[0].parse::<u32>().ok()
+        } else {
+            None
+        })
+    }
+
+    /// Sets the TOTALTRACKS comment.
+    #[inline]
+    pub fn set_total_tracks(&mut self, total_tracks: u32) {
+        self.set("TOTALTRACKS", vec!(format!("{}", total_tracks)));
+    }
+
+    /// Removes all values with the TOTALTRACKS key.
+    #[inline]
+    pub fn remove_total_tracks(&mut self) {
+        self.remove("TOTALTRACKS");
+    }
+   
+    /// Returns a reference to the vector of values with the ALBUMARTIST key.
+    #[inline]
+    pub fn album_artist(&self) -> Option<&Vec<String>> {
+        self.get("ALBUMARTIST")
+    }
+
+    /// Sets the values for the ALBUMARTIST key. This will result in any ALBUMARTISTSORT comments
+    /// being removed.
+    #[inline]
+    pub fn set_album_artist<T: Into<String>>(&mut self, album_artists: Vec<T>) {
+        self.remove("ALBUMARTISTSORT");
+        self.set("ALBUMARTIST", album_artists);
+    }
+
+    /// Removes all values with the ALBUMARTIST key. This will result in any ALBUMARTISTSORT
+    /// comments being removed as well.
+    #[inline]
+    pub fn remove_album_artist(&mut self) {
+        self.remove("ALBUMARTISTSORT");
+        self.remove("ALBUMARTIST");
+    }
+
+    /// Returns a reference to the vector of values with the LYRICS key.
+    #[inline]
+    pub fn lyrics(&self) -> Option<&Vec<String>> {
+        self.get("LYRICS")
+    }
+
+    /// Sets the values for the LYRICS key.
+    #[inline]
+    pub fn set_lyrics<T: Into<String>>(&mut self, lyrics: Vec<T>) {
+        self.set("LYRICS", lyrics);
+    }
+
+    /// Removes all values with the LYRICS key.
+    #[inline]
+    pub fn remove_lyrics(&mut self) {
+        self.remove("LYRICS");
+    }
+    // }}}
 }
 //}}}
