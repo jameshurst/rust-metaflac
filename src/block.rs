@@ -872,13 +872,11 @@ impl VorbisComment {
     }
 
     /// Returns a reference to the vector of comments for the specified key.
-    #[inline]
     pub fn get(&self, key: &str) -> Option<&Vec<String>> {
         self.comments.get(key)
     }
 
     /// Sets the comments for the specified key. Any previous values under the key will be removed.
-    #[inline]
     pub fn set<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
         let key_owned = key.into();
         self.remove(&key_owned[..]);
@@ -886,7 +884,6 @@ impl VorbisComment {
     }
 
     /// Removes the comments for the specified key.
-    #[inline]
     pub fn remove(&mut self, key: &str) {
         self.comments.remove(key);
     }
@@ -909,14 +906,12 @@ impl VorbisComment {
 
     // Getters/Setters {{{
     /// Returns a reference to the vector of values with the ARTIST key.
-    #[inline]
     pub fn artist(&self) -> Option<&Vec<String>> {
         self.get("ARTIST")
     }
 
     /// Sets the values for the ARTIST key. This will result in any ARTISTSORT comment being
     /// removed.
-    #[inline]
     pub fn set_artist<T: Into<String>>(&mut self, artists: Vec<T>) {
         self.remove("ARTISTSORT");
         self.set("ARTIST", artists);
@@ -924,21 +919,18 @@ impl VorbisComment {
     
     /// Removes all values with the ARTIST key. This will result in any ARTISTSORT comments being
     /// removed as well.
-    #[inline]
     pub fn remove_artist(&mut self) {
         self.remove("ARTISTSORT");
         self.remove("ARTIST");
     }
 
     /// Returns a reference to the vector of values with the ALBUM key.
-    #[inline]
     pub fn album(&self) -> Option<&Vec<String>> {
         self.get("ALBUM")
     }
 
     /// Sets the values for the ALBUM key. This will result in any ALBUMSORT comments being
     /// removed.
-    #[inline]
     pub fn set_album<T: Into<String>>(&mut self, albums: Vec<T>) {
         self.remove("ALBUMSORT");
         self.set("ALBUM", albums);
@@ -946,39 +938,33 @@ impl VorbisComment {
 
     /// Removes all values with the ALBUM key. This will result in any ALBUMSORT comments being
     /// removed as well.
-    #[inline]
     pub fn remove_album(&mut self) {
         self.remove("ALBUMSORT");
         self.remove("ALBUM");
     }
    
     /// Returns a reference to the vector of values with the GENRE key.
-    #[inline]
     pub fn genre(&self) -> Option<&Vec<String>> {
         self.get("GENRE")
     }
 
     /// Sets the values for the GENRE key.
-    #[inline]
     pub fn set_genre<T: Into<String>>(&mut self, genres: Vec<T>) {
         self.set("GENRE", genres);
     }
 
     /// Removes all values with the GENRE key.
-    #[inline]
     pub fn remove_genre(&mut self) {
         self.remove("GENRE");
     }
 
     /// Returns reference to the vector of values with the TITLE key.
-    #[inline]
     pub fn title(&self) -> Option<&Vec<String>> {
         self.get("TITLE")
     }
 
     /// Sets the values for the TITLE key. This will result in any TITLESORT comments being
     /// removed.
-    #[inline]
     pub fn set_title<T: Into<String>>(&mut self, title: Vec<T>) {
         self.remove("TITLESORT");
         self.set("TITLE", title);
@@ -986,14 +972,12 @@ impl VorbisComment {
 
     /// Removes all values with the TITLE key. This will result in any TITLESORT comments being
     /// removed as well.
-    #[inline]
     pub fn remove_title(&mut self) {
         self.remove("TITLESORT");
         self.remove("TITLE");
     }
 
     /// Attempts to convert the first TRACKNUMBER comment to a `u32`.
-    #[inline]
     pub fn track(&self) -> Option<u32> {
         self.get("TRACKNUMBER").and_then(|s| if s.len() > 0 {
             s[0].parse::<u32>().ok()
@@ -1003,19 +987,16 @@ impl VorbisComment {
     }
 
     /// Sets the TRACKNUMBER comment.
-    #[inline]
     pub fn set_track(&mut self, track: u32) {
         self.set("TRACKNUMBER", vec!(format!("{}", track)));
     }
 
     /// Removes all values with the TRACKNUMBER key.
-    #[inline]
     pub fn remove_track(&mut self) {
         self.remove("TRACKNUMBER");
     }
     
     /// Attempts to convert the first TOTALTRACKS comment to a `u32`.
-    #[inline]
     pub fn total_tracks(&self) -> Option<u32> {
         self.get("TOTALTRACKS").and_then(|s| if s.len() > 0 {
             s[0].parse::<u32>().ok()
@@ -1025,26 +1006,22 @@ impl VorbisComment {
     }
 
     /// Sets the TOTALTRACKS comment.
-    #[inline]
     pub fn set_total_tracks(&mut self, total_tracks: u32) {
         self.set("TOTALTRACKS", vec!(format!("{}", total_tracks)));
     }
 
     /// Removes all values with the TOTALTRACKS key.
-    #[inline]
     pub fn remove_total_tracks(&mut self) {
         self.remove("TOTALTRACKS");
     }
    
     /// Returns a reference to the vector of values with the ALBUMARTIST key.
-    #[inline]
     pub fn album_artist(&self) -> Option<&Vec<String>> {
         self.get("ALBUMARTIST")
     }
 
     /// Sets the values for the ALBUMARTIST key. This will result in any ALBUMARTISTSORT comments
     /// being removed.
-    #[inline]
     pub fn set_album_artist<T: Into<String>>(&mut self, album_artists: Vec<T>) {
         self.remove("ALBUMARTISTSORT");
         self.set("ALBUMARTIST", album_artists);
@@ -1052,26 +1029,22 @@ impl VorbisComment {
 
     /// Removes all values with the ALBUMARTIST key. This will result in any ALBUMARTISTSORT
     /// comments being removed as well.
-    #[inline]
     pub fn remove_album_artist(&mut self) {
         self.remove("ALBUMARTISTSORT");
         self.remove("ALBUMARTIST");
     }
 
     /// Returns a reference to the vector of values with the LYRICS key.
-    #[inline]
     pub fn lyrics(&self) -> Option<&Vec<String>> {
         self.get("LYRICS")
     }
 
     /// Sets the values for the LYRICS key.
-    #[inline]
     pub fn set_lyrics<T: Into<String>>(&mut self, lyrics: Vec<T>) {
         self.set("LYRICS", lyrics);
     }
 
     /// Removes all values with the LYRICS key.
-    #[inline]
     pub fn remove_lyrics(&mut self) {
         self.remove("LYRICS");
     }

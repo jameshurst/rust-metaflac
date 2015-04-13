@@ -34,13 +34,11 @@ impl Tag {
     }
 
     /// Adds a block to the tag.
-    #[inline]
     pub fn push_block(&mut self, block: Block) {
         self.blocks.push(block);
     }
 
     /// Returns a reference to the blocks in the tag.
-    #[inline]
     pub fn blocks(&self) -> &Vec<Block> {
         &self.blocks
     }
@@ -70,7 +68,6 @@ impl Tag {
     /// tag.remove_blocks(BlockType::Padding);
     /// assert_eq!(tag.blocks().len(), 1);
     /// ```
-    #[inline]
     pub fn remove_blocks(&mut self, block_type: BlockType) {
         self.blocks.retain(|b| b.block_type() != block_type);
     }
@@ -174,7 +171,6 @@ impl Tag {
     ///
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
-    #[inline]
     pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
         self.vorbis_comments_mut().set(key, values);
     }
@@ -197,7 +193,6 @@ impl Tag {
     /// tag.remove_vorbis(&key);
     /// assert!(tag.get_vorbis(&key).is_none());
     /// ```
-    #[inline]
     pub fn remove_vorbis(&mut self, key: &str) {
         self.vorbis_comments_mut().comments.remove(key);
     }
@@ -220,7 +215,6 @@ impl Tag {
     /// tag.remove_vorbis_pair(&key, &value1);
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value2[..]]);
     /// ```
-    #[inline]
     pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
         self.vorbis_comments_mut().remove_pair(key, value);
 

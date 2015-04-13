@@ -11,8 +11,8 @@ A library for reading and writing FLAC metadata.
 Add the dependency to your `Cargo.toml`:
 
 ```toml
-[dependencies.metaflac]
-git = "https://github.com/jamesrhurst/rust-metaflac"
+[dependencies]
+metaflac = "*"
 ```
 
 ```rust
