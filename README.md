@@ -1,6 +1,7 @@
 #rust-metaflac 
 
 [![Build Status](https://travis-ci.org/jamesrhurst/rust-metaflac.svg)](https://travis-ci.org/jamesrhurst/rust-metaflac)
+[![](http://meritbadge.herokuapp.com/metaflac)](https://crates.io/crates/metaflac)
 
 A library for reading and writing FLAC metadata.
 
