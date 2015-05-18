@@ -108,9 +108,9 @@ impl Tag {
     /// let mut tag = Tag::new();
     /// assert!(tag.vorbis_comments().is_none());
     ///
-    /// let key = "key".to_string();
-    /// let value1 = "value1".to_string();
-    /// let value2 = "value2".to_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone())); 
@@ -142,9 +142,9 @@ impl Tag {
     ///
     /// let mut tag = Tag::new();
     ///
-    /// let key = "key".to_string();
-    /// let value1 = "value1".to_string();
-    /// let value2 = "value2".to_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
     ///     value2.clone()));
@@ -163,9 +163,9 @@ impl Tag {
     ///
     /// let mut tag = Tag::new();
     ///
-    /// let key = "key".to_string();
-    /// let value1 = "value1".to_string();
-    /// let value2 = "value2".to_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     ///
@@ -183,9 +183,9 @@ impl Tag {
     ///
     /// let mut tag = Tag::new();
     ///
-    /// let key = "key".to_string();
-    /// let value1 = "value1".to_string();
-    /// let value2 = "value2".to_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..])); 
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
@@ -205,9 +205,9 @@ impl Tag {
     ///
     /// let mut tag = Tag::new();
     ///
-    /// let key = "key".to_string();
-    /// let value1 = "value1".to_string();
-    /// let value2 = "value2".to_string();
+    /// let key = "key".to_owned();
+    /// let value1 = "value1".to_owned();
+    /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis(key.clone(), vec!(&value1[..], &value2[..]));
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);

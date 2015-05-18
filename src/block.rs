@@ -837,7 +837,7 @@ impl VorbisComment {
 
             let comments_split: Vec<&str> = comments.splitn(2, '=').collect();
             let key = comments_split[0].to_ascii_uppercase();
-            let value = comments_split[1].to_string();
+            let value = comments_split[1].to_owned();
 
             if vorbis.comments.contains_key(&key) {
                 vorbis.comments.get_mut(&key).unwrap().push(value);
