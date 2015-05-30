@@ -72,7 +72,7 @@ impl Tag {
         self.blocks.retain(|b| b.block_type() != block_type);
     }
 
-    /// Returns a vector of references to the vorbis comment blocks.
+    /// Returns a reference to the first vorbis comment block.
     /// Returns `None` if no vorbis comment blocks are found.
     ///
     /// # Example
@@ -97,7 +97,7 @@ impl Tag {
         None
     }
 
-    /// Returns a vector of mutable references to the vorbis comment blocks.
+    /// Returns a mutable reference to the first vorbis comment block.
     /// If no block is found, a new vorbis comment block is added to the tag and a reference to the
     /// newly added block is returned.
     ///
@@ -132,7 +132,7 @@ impl Tag {
         self.vorbis_comments_mut()
     }
 
-    /// Returns a comma separated string of values for the specified vorbis comment key.
+    /// Returns a vector of strings values for the specified vorbis comment key.
     /// Returns `None` if the tag does not contain a vorbis comment or if the vorbis comment does
     /// not contain a comment with the specified key.
     ///
