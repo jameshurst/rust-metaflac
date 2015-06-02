@@ -4,9 +4,9 @@ version = "0.1.1"
 authors = ["James Hurst <jh.jameshurst@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/jamesrhurst/rust-metaflac"
-repository = "https://github.com/jamesrhurst/rust-metaflac"
-documentation = "https://jamesrhurst.github.io/rust-metaflac"
+homepage = "https://github.com/jameshurst/rust-metaflac"
+repository = "https://github.com/jameshurst/rust-metaflac"
+documentation = "https://jameshurst.github.io/rust-metaflac"
 description = "A library for reading and writing FLAC metadata."
 
 [dependencies]
