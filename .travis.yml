@@ -9,7 +9,7 @@ sudo: false
 script:
     - cargo build --verbose && cargo test --verbose && cargo doc --verbose
 
-after_success: 
+after_success:
     - |
         [ $TRAVIS_RUST_VERSION = nightly ] &&
         [ $TRAVIS_BRANCH = master ] &&
@@ -20,5 +20,5 @@ after_success:
         git push -fq https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
 
 env:
-  global:
-    secure: eCPJ1yPIn2PRrO+78fwM0cwoc6cpoC+vXfWSuFUnl6O4f7a1sTB3prEZZKC7XCKiJEBWwpeErVBQvepyaMMYIn3FcSO5TbtljsUjB/rIirxoqo7zfvaIqzOGRlzPQfRHVqbCbT6coO1V4zQ0QPl3O+LyeEUe/IYfypXN7F3gvy8=
+    global:
+        secure: I3RgYvud8PHuEzGRbL6T/QquPPiMwsmoUwPzHmrn3ODtQPBUSuRkqMjf24FlW5UGPXJLc9plW28ot4LI3eVVpoFdl8jLU9XQUIaVK6U39RWgzHCACNfdTXBTdtt/7jgVWPYwChyJTNOMOUcYFSZb3DWScIEMQbWzLlwW7EBsVkk=
