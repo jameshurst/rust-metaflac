@@ -10,7 +10,6 @@ documentation = "https://jameshurst.github.io/rust-metaflac"
 description = "A library for reading and writing FLAC metadata."
 
 [dependencies]
-libc = "*"
 log = "*"
 rustc-serialize = "*"
 byteorder = "*"

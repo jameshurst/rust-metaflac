@@ -1,5 +1,4 @@
 extern crate byteorder;
-extern crate libc;
 
 use self::byteorder::{ReadBytesExt, BigEndian};
 
@@ -7,15 +6,8 @@ use block::{Block, BlockType, Picture, PictureType, VorbisComment};
 use error::{Result, Error, ErrorKind};
 
 use std::path::{Path, PathBuf};
-use std::io::{self, Read, Write, Seek, SeekFrom};
-use std::fs::{self, File, OpenOptions};
-
-use std::ptr;
-use std::ffi;
-use self::libc::{c_char, L_tmpnam};
-extern {
-    pub fn tmpnam(s: *mut c_char) -> *const c_char;
-}
+use std::io::{Read, Write, Seek, SeekFrom};
+use std::fs::{File, OpenOptions};
 
 /// A structure representing a flac metadata tag.
 pub struct Tag {
@@ -451,17 +443,7 @@ impl Tag {
                 }
             };
 
-            let tmp_name = unsafe {
-                let mut c_buf: [c_char; L_tmpnam as usize + 1] = [0; L_tmpnam as usize + 1];
-                let ret = tmpnam(c_buf.as_mut_ptr());
-                if ret == ptr::null() {
-                    return Err(Error::from(io::Error::new(io::ErrorKind::Other, "failed to create temporary file")))
-                }
-                try!(String::from_utf8(ffi::CStr::from_ptr(c_buf.as_ptr()).to_bytes().to_vec()))
-            };
-            debug!("writing to temporary file: {}", tmp_name);
-
-            let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&tmp_name[..]));
+            let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&path));
 
             try!(file.write(b"fLaC"));
 
@@ -479,8 +461,6 @@ impl Tag {
                 Some(data) => try!(file.write_all(&data[..])),
                 None => {}
             }
-
-            try!(fs::rename(tmp_name, &path));
         }
 
         self.length = new_length;
