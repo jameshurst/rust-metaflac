@@ -799,7 +799,7 @@ impl SeekTable {
 
 // VorbisComment {{{
 /// A structure representing a VORBIS_COMMENT block.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VorbisComment {
     /// The vendor string.
     pub vendor_string: String,
