@@ -16,7 +16,7 @@ use std::iter::repeat;
 // BlockType {{{
 /// Types of blocks. Used primarily to map blocks to block identifiers when reading and writing.
 #[allow(missing_docs)]
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BlockType {
     StreamInfo,
     Padding,
@@ -207,6 +207,7 @@ impl Block {
 
 // StreamInfo {{{
 /// A structure representing a STREAMINFO block.
+#[derive(Clone, Eq, PartialEq)]
 pub struct StreamInfo {
     /// The minimum block size (in samples) used in the stream.
     pub min_block_size: u16,
@@ -303,6 +304,7 @@ impl StreamInfo {
 
 // Application {{{
 /// A structure representing an APPLICATION block.
+#[derive(Clone, Eq, PartialEq)]
 pub struct Application {
     /// Registered application ID.
     pub id: Vec<u8>,
@@ -350,7 +352,7 @@ impl Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point. 
     pub offset: u64,
@@ -366,7 +368,7 @@ impl CueSheetTrackIndex {
 }
 
 /// A structure representing a cuesheet track.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
     /// offset to the first index point of the track. 
@@ -395,7 +397,7 @@ impl CueSheetTrack {
 }
 
 /// A structure representing a CUESHEET block.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheet {
     /// Media catalog number.
     pub catalog_num: String,
@@ -535,7 +537,7 @@ impl CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -595,6 +597,7 @@ impl FromPrimitive for PictureType {
 }
 
 /// A structure representing a PICTURE block.
+#[derive(Clone, Eq, PartialEq)]
 pub struct Picture {
     /// The picture type.
     pub picture_type: PictureType,
@@ -709,7 +712,7 @@ impl Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
@@ -757,7 +760,7 @@ impl SeekPoint {
 //}}}
 
 /// A structure representing a SEEKTABLE block.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SeekTable {
     /// One or more seek points. 
     pub seekpoints: Vec<SeekPoint>
