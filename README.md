@@ -13,7 +13,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-metaflac = "0.1.4"
+metaflac = "0.1"
 ```
 
 ```rust
