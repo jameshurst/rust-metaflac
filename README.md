@@ -1,4 +1,4 @@
-#rust-metaflac 
+# rust-metaflac 
 
 [![Build Status](https://travis-ci.org/jameshurst/rust-metaflac.svg)](https://travis-ci.org/jameshurst/rust-metaflac)
 [![](http://meritbadge.herokuapp.com/metaflac)](https://crates.io/crates/metaflac)
@@ -7,7 +7,7 @@ A library for reading and writing FLAC metadata.
 
 [Documentation](http://jameshurst.github.io/rust-metaflac/)
 
-##Usage
+## Usage
 
 Add the dependency to your `Cargo.toml`:
 
