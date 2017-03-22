@@ -11,7 +11,7 @@ description = "A library for reading and writing FLAC metadata."
 keywords = ["flac", "audio", "parser", "metadata"]
 
 [dependencies]
-log = "0.3.6"
-rustc-serialize = "0.3.22"
+log = "0.3.7"
+rustc-serialize = "0.3.23"
 byteorder = "1.0.0"
-num = "0.1.36"
+num = "0.1.37"

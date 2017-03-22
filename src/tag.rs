@@ -5,6 +5,7 @@ use self::byteorder::{ReadBytesExt, BigEndian};
 use block::{Block, BlockType, Picture, PictureType, VorbisComment};
 use error::{Result, Error, ErrorKind};
 
+use std::ascii::AsciiExt;
 use std::path::{Path, PathBuf};
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
@@ -138,13 +139,12 @@ impl Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
-    ///     value2.clone()));
+    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     ///
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
     pub fn get_vorbis(&self, key: &str) -> Option<&Vec<String>> {
-        self.vorbis_comments().and_then(|c| c.get(key))
+        self.vorbis_comments().and_then(|c| c.get(&key.to_ascii_uppercase()))
     }
 
     /// Sets the values for the specified vorbis comment key.
@@ -164,7 +164,7 @@ impl Tag {
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
     pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
-        self.vorbis_comments_mut().set(key, values);
+        self.vorbis_comments_mut().set(key.into().to_ascii_uppercase(), values);
     }
 
     /// Removes the values for the specified vorbis comment key.
@@ -186,7 +186,7 @@ impl Tag {
     /// assert!(tag.get_vorbis(&key).is_none());
     /// ```
     pub fn remove_vorbis(&mut self, key: &str) {
-        self.vorbis_comments_mut().comments.remove(key);
+        self.vorbis_comments_mut().comments.remove(&key.to_ascii_uppercase());
     }
 
     /// Removes the vorbis comments with the specified key and value.
@@ -208,7 +208,7 @@ impl Tag {
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value2[..]]);
     /// ```
     pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
-        self.vorbis_comments_mut().remove_pair(key, value);
+        self.vorbis_comments_mut().remove_pair(&key.to_ascii_uppercase(), value);
 
     }
 
@@ -476,3 +476,23 @@ impl Tag {
         Ok(tag)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn vorbis_case_sensitivity() {
+        let mut tag = Tag::new();
+
+        tag.set_vorbis("KEY", vec!("value"));
+       
+        assert_eq!(&tag.get_vorbis("KEY").unwrap()[..], &["value"]);
+        assert_eq!(&tag.get_vorbis("key").unwrap()[..], &["value"]);
+        
+        tag.remove_vorbis("key");
+        assert!(tag.get_vorbis("KEY").is_none());
+    }
+
+}
+
