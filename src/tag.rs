@@ -11,6 +11,7 @@ use std::io::{Read, Write, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 
 /// A structure representing a flac metadata tag.
+#[derive(Clone)]
 pub struct Tag {
     /// The path from which the blocks were loaded.
     path: Option<PathBuf>,
