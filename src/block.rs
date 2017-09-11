@@ -70,7 +70,7 @@ impl FromPrimitive for BlockType {
 // }}}
 
 /// The parsed content of a metadata block.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
     StreamInfo(StreamInfo),
