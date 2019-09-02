@@ -1,14 +1,13 @@
 extern crate byteorder;
 
-use self::byteorder::{ReadBytesExt, BigEndian};
+use self::byteorder::{BigEndian, ReadBytesExt};
 
 use block::{Block, BlockType, Picture, PictureType, VorbisComment};
-use error::{Result, Error, ErrorKind};
-
+use error::{Error, ErrorKind, Result};
 use std::ascii::AsciiExt;
-use std::path::{Path, PathBuf};
-use std::io::{Read, Write, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 /// A structure representing a flac metadata tag.
 #[derive(Clone)]
@@ -24,7 +23,11 @@ pub struct Tag {
 impl Tag {
     /// Creates a new FLAC tag with no blocks.
     pub fn new() -> Tag {
-        Tag { path: None, blocks: Vec::new(), length: 0 }
+        Tag {
+            path: None,
+            blocks: Vec::new(),
+            length: 0,
+        }
     }
 
     /// Adds a block to the tag.
@@ -58,7 +61,7 @@ impl Tag {
     /// tag.push_block(Block::Padding(10));
     /// tag.push_block(Block::Unknown((20, Vec::new())));
     /// tag.push_block(Block::Padding(15));
-    /// 
+    ///
     /// tag.remove_blocks(BlockType::Padding);
     /// assert_eq!(tag.blocks().len(), 1);
     /// ```
@@ -107,7 +110,7 @@ impl Tag {
     /// let value2 = "value2".to_owned();
     ///
     /// tag.vorbis_comments_mut().comments.insert(key.clone(), vec!(value1.clone(),
-    ///     value2.clone())); 
+    ///     value2.clone()));
     ///
     /// assert!(tag.vorbis_comments().is_some());
     /// assert!(tag.vorbis_comments().unwrap().comments.get(&key).is_some());
@@ -121,7 +124,7 @@ impl Tag {
                 }
             }
         }
-        
+
         self.push_block(Block::VorbisComment(VorbisComment::new()));
         self.vorbis_comments_mut()
     }
@@ -145,7 +148,8 @@ impl Tag {
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
     pub fn get_vorbis(&self, key: &str) -> Option<&Vec<String>> {
-        self.vorbis_comments().and_then(|c| c.get(&key.to_ascii_uppercase()))
+        self.vorbis_comments()
+            .and_then(|c| c.get(&key.to_ascii_uppercase()))
     }
 
     /// Sets the values for the specified vorbis comment key.
@@ -165,7 +169,8 @@ impl Tag {
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     /// ```
     pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
-        self.vorbis_comments_mut().set(key.into().to_ascii_uppercase(), values);
+        self.vorbis_comments_mut()
+            .set(key.into().to_ascii_uppercase(), values);
     }
 
     /// Removes the values for the specified vorbis comment key.
@@ -180,14 +185,16 @@ impl Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..])); 
+    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
     ///
     /// tag.remove_vorbis(&key);
     /// assert!(tag.get_vorbis(&key).is_none());
     /// ```
     pub fn remove_vorbis(&mut self, key: &str) {
-        self.vorbis_comments_mut().comments.remove(&key.to_ascii_uppercase());
+        self.vorbis_comments_mut()
+            .comments
+            .remove(&key.to_ascii_uppercase());
     }
 
     /// Removes the vorbis comments with the specified key and value.
@@ -209,8 +216,8 @@ impl Tag {
     /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value2[..]]);
     /// ```
     pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
-        self.vorbis_comments_mut().remove_pair(&key.to_ascii_uppercase(), value);
-
+        self.vorbis_comments_mut()
+            .remove_pair(&key.to_ascii_uppercase(), value);
     }
 
     /// Returns a vector of references to the pictures in the tag.
@@ -249,12 +256,17 @@ impl Tag {
     /// assert_eq!(tag.pictures().len(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
-    /// 
-    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/jpeg"); 
+    ///
+    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/jpeg");
     /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
     /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xFF)[..]);
     /// ```
-    pub fn add_picture<T: Into<String>>(&mut self, mime_type: T, picture_type: PictureType, data: Vec<u8>) {
+    pub fn add_picture<T: Into<String>>(
+        &mut self,
+        mime_type: T,
+        picture_type: PictureType,
+        data: Vec<u8>,
+    ) {
         self.remove_picture_type(picture_type);
 
         let mut picture = Picture::new();
@@ -282,16 +294,14 @@ impl Tag {
     /// tag.remove_picture_type(CoverFront);
     /// assert_eq!(tag.pictures().len(), 1);
     ///
-    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/png"); 
+    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/png");
     /// assert_eq!(tag.pictures()[0].picture_type, Other);
     /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xAB)[..]);
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
-        self.blocks.retain(|block: &Block| {
-            match *block {
-                Block::Picture(ref picture) => picture.picture_type != picture_type,
-                _ => true
-            }
+        self.blocks.retain(|block: &Block| match *block {
+            Block::Picture(ref picture) => picture.picture_type != picture_type,
+            _ => true,
         });
     }
 
@@ -299,7 +309,10 @@ impl Tag {
     /// will be returned if this is called on a tag which was not read from a file.
     pub fn save(&mut self) -> ::Result<()> {
         if self.path.is_none() {
-            return Err(::Error::new(::ErrorKind::InvalidInput, "attempted to save file which was not read from a path"))
+            return Err(::Error::new(
+                ::ErrorKind::InvalidInput,
+                "attempted to save file which was not read from a path",
+            ));
         }
 
         let path = self.path.clone().unwrap();
@@ -310,22 +323,20 @@ impl Tag {
     pub fn skip_metadata<R: Read + Seek>(reader: &mut R) -> Vec<u8> {
         macro_rules! try_io {
             ($reader:ident, $action:expr) => {
-                match $action { 
-                    Ok(bytes) => bytes, 
-                    Err(_) => {
-                        match $reader.seek(SeekFrom::Start(0)) {
-                            Ok(_) => {
-                                let mut data = Vec::new();
-                                match $reader.read_to_end(&mut data) {
-                                    Ok(_) => return data,
-                                    Err(_) => return Vec::new()
-                                }
-                            },
-                            Err(_) => return Vec::new()
+                match $action {
+                    Ok(bytes) => bytes,
+                    Err(_) => match $reader.seek(SeekFrom::Start(0)) {
+                        Ok(_) => {
+                            let mut data = Vec::new();
+                            match $reader.read_to_end(&mut data) {
+                                Ok(_) => return data,
+                                Err(_) => return Vec::new(),
+                            }
                         }
-                    }
+                        Err(_) => return Vec::new(),
+                    },
                 }
-            }
+            };
         }
 
         let mut ident = [0; 4];
@@ -334,7 +345,7 @@ impl Tag {
             let mut more = true;
             while more {
                 let header = try_io!(reader, reader.read_u32::<BigEndian>());
-                
+
                 more = ((header >> 24) & 0x80) == 0;
                 let length = header & 0xFF_FF_FF;
 
@@ -355,11 +366,11 @@ impl Tag {
     pub fn is_candidate<R: Read + Seek>(reader: &mut R) -> bool {
         macro_rules! try_or_false {
             ($action:expr) => {
-                match $action { 
-                    Ok(result) => result, 
-                    Err(_) => return false 
+                match $action {
+                    Ok(result) => result,
+                    Err(_) => return false,
                 }
-            }
+            };
         }
 
         let mut ident = [0; 4];
@@ -375,7 +386,10 @@ impl Tag {
         let mut ident = [0; 4];
         try!(reader.read(&mut ident));
         if &ident[..] != b"fLaC" {
-            return Err(Error::new(ErrorKind::InvalidInput, "reader does not contain flac metadata"));
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "reader does not contain flac metadata",
+            ));
         }
 
         loop {
@@ -421,9 +435,14 @@ impl Tag {
         }
 
         // write using padding
-        if self.path.is_some() && path.as_ref() == self.path.as_ref().unwrap().as_path() && new_length + 4 <= self.length {
+        if self.path.is_some()
+            && path.as_ref() == self.path.as_ref().unwrap().as_path()
+            && new_length + 4 <= self.length
+        {
             debug!("writing using padding");
-            let mut file = try!(OpenOptions::new().write(true).open(self.path.as_ref().unwrap()));
+            let mut file = try!(OpenOptions::new()
+                .write(true)
+                .open(self.path.as_ref().unwrap()));
             try!(file.seek(SeekFrom::Start(4)));
 
             for bytes in block_bytes.iter() {
@@ -434,17 +453,22 @@ impl Tag {
             let padding = Block::Padding(self.length - new_length - 4);
             try!(padding.write_to(true, &mut file));
             self.push_block(padding);
-        } else { // write by copying file data
+        } else {
+            // write by copying file data
             debug!("writing to new file");
 
             let data_opt = {
                 match File::open(&path) {
                     Ok(mut file) => Some(Tag::skip_metadata(&mut file)),
-                    Err(_) => None
+                    Err(_) => None,
                 }
             };
 
-            let mut file = try!(OpenOptions::new().write(true).truncate(true).create(true).open(&path));
+            let mut file = try!(OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(&path));
 
             try!(file.write(b"fLaC"));
 
@@ -471,8 +495,9 @@ impl Tag {
 
     /// Attempts to read a FLAC tag from the file at the specified path.
     pub fn read_from_path<P: AsRef<Path>>(path: P) -> Result<Tag> {
-        let mut file = try!(File::open(&path));
-        let mut tag = try!(Tag::read_from(&mut file));
+        let file = try!(File::open(&path));
+        let mut reader = BufReader::new(file);
+        let mut tag = try!(Tag::read_from(&mut reader));
         tag.path = Some(path.as_ref().to_path_buf());
         Ok(tag)
     }
@@ -481,19 +506,18 @@ impl Tag {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn vorbis_case_sensitivity() {
         let mut tag = Tag::new();
 
-        tag.set_vorbis("KEY", vec!("value"));
-       
+        tag.set_vorbis("KEY", vec!["value"]);
+
         assert_eq!(&tag.get_vorbis("KEY").unwrap()[..], &["value"]);
         assert_eq!(&tag.get_vorbis("key").unwrap()[..], &["value"]);
-        
+
         tag.remove_vorbis("key");
         assert!(tag.get_vorbis("KEY").is_none());
     }
 
 }
-
