@@ -37,8 +37,8 @@ impl Error {
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        if self.cause().is_some() {
-            self.cause().unwrap().description()
+        if self.source().is_some() {
+            self.source().unwrap().description()
         } else {
            match self.kind {
                ErrorKind::Io(ref err) => error::Error::description(err),
@@ -48,7 +48,7 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match self.kind {
             ErrorKind::Io(ref err) => Some(err),
             ErrorKind::StringDecoding(ref err) => Some(err), 

@@ -4,7 +4,6 @@ use self::byteorder::{BigEndian, ReadBytesExt};
 
 use block::{Block, BlockType, Picture, PictureType, VorbisComment};
 use error::{Error, ErrorKind, Result};
-use std::ascii::AsciiExt;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -380,7 +379,7 @@ impl Tag {
     }
 
     /// Attempts to read a FLAC tag from the reader.
-    pub fn read_from(reader: &mut Read) -> Result<Tag> {
+    pub fn read_from(reader: &mut dyn Read) -> Result<Tag> {
         let mut tag = Tag::new();
 
         let mut ident = [0; 4];
@@ -405,7 +404,7 @@ impl Tag {
     }
 
     /// Attempts to write the FLAC tag to the wrier.
-    pub fn write_to(&mut self, writer: &mut Write) -> Result<()> {
+    pub fn write_to(&mut self, writer: &mut dyn Write) -> Result<()> {
         try!(writer.write(b"fLaC"));
 
         let nblocks = self.blocks.len();

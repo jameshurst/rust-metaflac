@@ -8,7 +8,6 @@ use self::byteorder::{ReadBytesExt, BigEndian};
 use self::num::{FromPrimitive, ToPrimitive};
 use self::rustc_serialize::hex::ToHex;
 
-use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::repeat;
@@ -93,7 +92,7 @@ pub enum Block {
 impl Block {
     /// Attempts to read a block from the reader. Returns a tuple containing a boolean indicating
     /// if the block was the last block, the length of the block in bytes, and the new `Block`.
-    pub fn read_from(reader: &mut Read) -> Result<(bool, u32, Block)> {
+    pub fn read_from(reader: &mut dyn Read) -> Result<(bool, u32, Block)> {
         let header = try!(reader.read_u32::<BigEndian>());
 
         let is_last = ((header >> 24) & 0x80) != 0;
@@ -125,7 +124,7 @@ impl Block {
     }
 
     /// Attemps to write the block to the writer. Returns the length of the block in bytes.
-    pub fn write_to(&self, is_last: bool, writer: &mut Write) -> Result<u32> {
+    pub fn write_to(&self, is_last: bool, writer: &mut dyn Write) -> Result<u32> {
         let (content_len, contents) = match *self {
             Block::StreamInfo(ref streaminfo) => {
                 let bytes = streaminfo.to_bytes();
