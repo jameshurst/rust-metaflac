@@ -1,8 +1,8 @@
 extern crate byteorder;
 
 use std::error;
-use std::io;
 use std::fmt;
+use std::io;
 use std::string;
 
 /// Type alias for the result of tag operations.
@@ -31,7 +31,10 @@ pub struct Error {
 impl Error {
     /// Creates a new `Error` using the error kind and description.
     pub fn new(kind: ErrorKind, description: &'static str) -> Error {
-        Error { kind: kind, description: description }
+        Error {
+            kind: kind,
+            description: description,
+        }
     }
 }
 
@@ -40,32 +43,38 @@ impl error::Error for Error {
         if self.source().is_some() {
             self.source().unwrap().description()
         } else {
-           match self.kind {
-               ErrorKind::Io(ref err) => error::Error::description(err),
-               ErrorKind::StringDecoding(ref err) => err.description(),
-               _ => self.description
-           }
+            match self.kind {
+                ErrorKind::Io(ref err) => error::Error::description(err),
+                ErrorKind::StringDecoding(ref err) => err.description(),
+                _ => self.description,
+            }
         }
     }
 
     fn cause(&self) -> Option<&dyn error::Error> {
         match self.kind {
             ErrorKind::Io(ref err) => Some(err),
-            ErrorKind::StringDecoding(ref err) => Some(err), 
-            _ => None 
+            ErrorKind::StringDecoding(ref err) => Some(err),
+            _ => None,
         }
     }
 }
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
-        Error { kind: ErrorKind::Io(err), description: "" }
+        Error {
+            kind: ErrorKind::Io(err),
+            description: "",
+        }
     }
 }
 
 impl From<string::FromUtf8Error> for Error {
     fn from(err: string::FromUtf8Error) -> Error {
-        Error { kind: ErrorKind::StringDecoding(err), description: "" }
+        Error {
+            kind: ErrorKind::StringDecoding(err),
+            description: "",
+        }
     }
 }
 

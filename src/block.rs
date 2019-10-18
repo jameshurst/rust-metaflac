@@ -1,12 +1,11 @@
-extern crate rustc_serialize;
 extern crate byteorder;
+extern crate hex;
 extern crate num;
 
-use error::{Result, Error, ErrorKind};
+use error::{Error, ErrorKind, Result};
 
-use self::byteorder::{ReadBytesExt, BigEndian};
+use self::byteorder::{BigEndian, ReadBytesExt};
 use self::num::{FromPrimitive, ToPrimitive};
-use self::rustc_serialize::hex::ToHex;
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -42,7 +41,7 @@ impl ToPrimitive for BlockType {
             BlockType::VorbisComment => 4,
             BlockType::CueSheet => 5,
             BlockType::Picture => 6,
-            BlockType::Unknown(n) => n as u64
+            BlockType::Unknown(n) => n as u64,
         })
     }
 }
@@ -62,7 +61,7 @@ impl FromPrimitive for BlockType {
             4 => BlockType::VorbisComment,
             5 => BlockType::CueSheet,
             6 => BlockType::Picture,
-            n => BlockType::Unknown(n as u8)
+            n => BlockType::Unknown(n as u8),
         })
     }
 }
@@ -86,7 +85,7 @@ pub enum Block {
     /// A value containing a parsed vorbis comment block.
     VorbisComment(VorbisComment),
     /// An value containing the bytes of an unknown block.
-    Unknown((u8, Vec<u8>))
+    Unknown((u8, Vec<u8>)),
 }
 
 impl Block {
@@ -99,10 +98,13 @@ impl Block {
 
         let blocktype_byte = (header >> 24) as u8 & 0x7F;
         let blocktype = BlockType::from_u8(blocktype_byte).unwrap();
-            
+
         let length = header & 0xFF_FF_FF;
 
-        debug!("reading {} bytes for type {:?} ({})", length, blocktype, blocktype_byte);
+        debug!(
+            "reading {} bytes for type {:?} ({})",
+            length, blocktype, blocktype_byte
+        );
 
         let mut data = Vec::new();
         reader.take(length as u64).read_to_end(&mut data).unwrap();
@@ -112,15 +114,17 @@ impl Block {
             BlockType::Padding => Block::Padding(length),
             BlockType::Application => Block::Application(Application::from_bytes(&data[..])),
             BlockType::SeekTable => Block::SeekTable(SeekTable::from_bytes(&data[..])),
-            BlockType::VorbisComment => Block::VorbisComment(try!(VorbisComment::from_bytes(&data[..]))),
+            BlockType::VorbisComment => {
+                Block::VorbisComment(try!(VorbisComment::from_bytes(&data[..])))
+            }
             BlockType::Picture => Block::Picture(try!(Picture::from_bytes(&data[..]))),
             BlockType::CueSheet => Block::CueSheet(try!(CueSheet::from_bytes(&data[..]))),
-            BlockType::Unknown(_) => Block::Unknown((blocktype_byte, data))
+            BlockType::Unknown(_) => Block::Unknown((blocktype_byte, data)),
         };
 
         debug!("{:?}", block);
 
-        Ok((is_last, length + 4, block)) 
+        Ok((is_last, length + 4, block))
     }
 
     /// Attemps to write the block to the writer. Returns the length of the block in bytes.
@@ -129,18 +133,16 @@ impl Block {
             Block::StreamInfo(ref streaminfo) => {
                 let bytes = streaminfo.to_bytes();
                 (bytes.len() as u32, Some(bytes))
-            },
+            }
             Block::Application(ref application) => {
                 let bytes = application.to_bytes();
                 (bytes.len() as u32, Some(bytes))
-            },
+            }
             Block::CueSheet(ref cuesheet) => {
                 let bytes = cuesheet.to_bytes();
                 (bytes.len() as u32, Some(bytes))
-            },
-            Block::Padding(size) => {
-                (size, None)
-            },
+            }
+            Block::Padding(size) => (size, None),
             Block::Picture(ref picture) => {
                 let bytes = picture.to_bytes();
                 (bytes.len() as u32, Some(bytes))
@@ -148,15 +150,13 @@ impl Block {
             Block::SeekTable(ref seektable) => {
                 let bytes = seektable.to_bytes();
                 (bytes.len() as u32, Some(bytes))
-            },
+            }
             Block::VorbisComment(ref vorbis) => {
                 let bytes = vorbis.to_bytes();
                 (bytes.len() as u32, Some(bytes))
-            },
-            Block::Unknown((_, ref bytes)) => {
-                (bytes.len() as u32, Some(bytes.clone()))
-            },
-        }; 
+            }
+            Block::Unknown((_, ref bytes)) => (bytes.len() as u32, Some(bytes.clone())),
+        };
 
         let mut header: u32 = 0;
         if is_last {
@@ -210,41 +210,47 @@ impl Block {
 pub struct StreamInfo {
     /// The minimum block size (in samples) used in the stream.
     pub min_block_size: u16,
-    /// The maximum block size (in samples) used in the stream. 
+    /// The maximum block size (in samples) used in the stream.
     pub max_block_size: u16,
     /// The minimum frame size (in bytes) used in the stream.
     pub min_frame_size: u32,
     /// The maximum frame size (in bytes) used in the stream.
     pub max_frame_size: u32,
-    ///Sample rate in Hz. 
+    ///Sample rate in Hz.
     pub sample_rate: u32,
-    /// Number of channels. FLAC supports from 1 to 8 channels. 
+    /// Number of channels. FLAC supports from 1 to 8 channels.
     pub num_channels: u8,
-    /// Bits per sample. FLAC supports from 4 to 32 bits per sample. 
+    /// Bits per sample. FLAC supports from 4 to 32 bits per sample.
     pub bits_per_sample: u8,
-    /// Total samples in stream. 
+    /// Total samples in stream.
     pub total_samples: u64,
-    /// MD5 signature of the unencoded audio data. 
-    pub md5: Vec<u8>
+    /// MD5 signature of the unencoded audio data.
+    pub md5: Vec<u8>,
 }
 
 impl ::std::fmt::Debug for StreamInfo {
     fn fmt(&self, out: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, &self.md5[..].to_hex())
+        write!(out, "StreamInfo {{ min_block_size: {}, max_block_size: {}, min_frame_size: {}, max_frame_size: {}, sample_rate: {}, num_channels: {}, bits_per_sample: {}, total_samples: {}, md5: {} }}", self.min_block_size, self.max_block_size, self.min_frame_size, self.max_frame_size, self.sample_rate, self.num_channels, self.bits_per_sample, self.total_samples, hex::encode(&self.md5[..]))
     }
 }
 
 impl StreamInfo {
     /// Returns a new `StreamInfo` with zero/empty values.
     pub fn new() -> StreamInfo {
-        StreamInfo { 
-            min_block_size: 0, max_block_size: 0, min_frame_size: 0,
-            max_frame_size: 0, sample_rate: 0, num_channels: 0, 
-            bits_per_sample: 0, total_samples: 0, md5: Vec::new() 
+        StreamInfo {
+            min_block_size: 0,
+            max_block_size: 0,
+            min_frame_size: 0,
+            max_frame_size: 0,
+            sample_rate: 0,
+            num_channels: 0,
+            bits_per_sample: 0,
+            total_samples: 0,
+            md5: Vec::new(),
         }
     }
 
-    /// Parses the bytes as a StreamInfo block. 
+    /// Parses the bytes as a StreamInfo block.
     pub fn from_bytes(bytes: &[u8]) -> StreamInfo {
         let mut streaminfo = StreamInfo::new();
         let mut i = 0;
@@ -261,7 +267,8 @@ impl StreamInfo {
         streaminfo.max_frame_size = ::util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
         i += 3;
 
-        streaminfo.sample_rate = ((::util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4) | ((bytes[i + 2] as u32 & 0xF0) >> 4);
+        streaminfo.sample_rate = ((::util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4)
+            | ((bytes[i + 2] as u32 & 0xF0) >> 4);
         i += 2;
 
         streaminfo.num_channels = ((bytes[i] & 0x0E) >> 1) + 1;
@@ -269,7 +276,8 @@ impl StreamInfo {
         streaminfo.bits_per_sample = (((bytes[i] & 0x01) << 4) | ((bytes[i + 1] & 0xF0) >> 4)) + 1;
         i += 1;
 
-        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32) | ::util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
+        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32)
+            | ::util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
         i += 5;
 
         streaminfo.md5 = bytes[i..i + 16].to_vec();
@@ -287,10 +295,13 @@ impl StreamInfo {
         bytes.extend(::util::u64_to_be_bytes(self.max_frame_size as u64, 3).into_iter());
         bytes.extend(::util::u64_to_be_bytes((self.sample_rate >> 4) as u64, 2).into_iter());
 
-        let byte = ((self.sample_rate << 4) & 0xF0) as u8 | (((self.num_channels - 1) << 1) & 0x0E) as u8 | (((self.bits_per_sample - 1) >> 4) & 0x01) as u8;
+        let byte = ((self.sample_rate << 4) & 0xF0) as u8
+            | (((self.num_channels - 1) << 1) & 0x0E) as u8
+            | (((self.bits_per_sample - 1) >> 4) & 0x01) as u8;
         bytes.push(byte);
 
-        let byte = (((self.bits_per_sample - 1) << 4) & 0xF0) as u8 | ((self.total_samples >> 32) & 0x0F) as u8;
+        let byte = (((self.bits_per_sample - 1) << 4) & 0xF0) as u8
+            | ((self.total_samples >> 32) & 0x0F) as u8;
         bytes.push(byte);
 
         bytes.extend(::util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
@@ -308,22 +319,30 @@ pub struct Application {
     /// Registered application ID.
     pub id: Vec<u8>,
     /// Application data.
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl ::std::fmt::Debug for Application {
     fn fmt(&self, out: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(out, "Application {{ id: {}, data: {:?} }}", &self.id[..].to_hex(), self.data)
+        write!(
+            out,
+            "Application {{ id: {}, data: {:?} }}",
+            hex::encode(&self.id[..]),
+            self.data
+        )
     }
 }
 
 impl Application {
     /// Returns a new `Application` with a zero id and no data.
     pub fn new() -> Application {
-        Application { id: Vec::new(), data: Vec::new() } 
+        Application {
+            id: Vec::new(),
+            data: Vec::new(),
+        }
     }
 
-    /// Parses the bytes as an application block. 
+    /// Parses the bytes as an application block.
     pub fn from_bytes(bytes: &[u8]) -> Application {
         let mut application = Application::new();
         let mut i = 0;
@@ -333,8 +352,8 @@ impl Application {
 
         application.data = bytes[i..].to_vec();
 
-        application 
-    } 
+        application
+    }
 
     /// Returns a vector representation of the application block suitable for writing to a file.
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -353,16 +372,19 @@ impl Application {
 /// A structure representing a cuesheet track index.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrackIndex {
-    /// Offset in samples, relative to the track offset, of the index point. 
+    /// Offset in samples, relative to the track offset, of the index point.
     pub offset: u64,
-    /// The index point number. 
-    pub point_num: u8
+    /// The index point number.
+    pub point_num: u8,
 }
 
 impl CueSheetTrackIndex {
     /// Returns a new `CueSheetTrackIndex` with all zero values.
     pub fn new() -> CueSheetTrackIndex {
-        CueSheetTrackIndex { offset: 0, point_num: 0 }
+        CueSheetTrackIndex {
+            offset: 0,
+            point_num: 0,
+        }
     }
 }
 
@@ -370,9 +392,9 @@ impl CueSheetTrackIndex {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
-    /// offset to the first index point of the track. 
+    /// offset to the first index point of the track.
     pub offset: u64,
-    /// Track number. 
+    /// Track number.
     pub number: u8,
     /// Track ISRC. This is a 12-digit alphanumeric code.  
     pub isrc: String,
@@ -380,8 +402,8 @@ pub struct CueSheetTrack {
     pub is_audio: bool,
     /// The pre-emphasis flag.
     pub pre_emphasis: bool,
-    /// For all tracks except the lead-out track, one or more track index points. 
-    pub indices: Vec<CueSheetTrackIndex>
+    /// For all tracks except the lead-out track, one or more track index points.
+    pub indices: Vec<CueSheetTrackIndex>,
 }
 
 impl CueSheetTrack {
@@ -389,8 +411,12 @@ impl CueSheetTrack {
     /// values.
     pub fn new() -> CueSheetTrack {
         CueSheetTrack {
-            offset: 0, number: 0, isrc: String::new(), is_audio: true, pre_emphasis: false, 
-            indices: Vec::new() 
+            offset: 0,
+            number: 0,
+            isrc: String::new(),
+            is_audio: true,
+            pre_emphasis: false,
+            indices: Vec::new(),
         }
     }
 }
@@ -405,25 +431,28 @@ pub struct CueSheet {
     /// True if the cuesheet corresponds to a compact disc.
     pub is_cd: bool,
     /// One or more tracks.
-    pub tracks: Vec<CueSheetTrack>
+    pub tracks: Vec<CueSheetTrack>,
 }
 
 impl CueSheet {
     /// Returns a new `CueSheet` for a CD with zero/empty values.
     pub fn new() -> CueSheet {
-        CueSheet { 
-            catalog_num: String::new(), num_leadin: 0, is_cd: true, tracks: Vec::new()
+        CueSheet {
+            catalog_num: String::new(),
+            num_leadin: 0,
+            is_cd: true,
+            tracks: Vec::new(),
         }
     }
 
-    /// Parses the bytes as a cuesheet block. 
+    /// Parses the bytes as a cuesheet block.
     pub fn from_bytes(bytes: &[u8]) -> Result<CueSheet> {
         let mut cuesheet = CueSheet::new();
         let mut i = 0;
 
         cuesheet.catalog_num = try!(String::from_utf8(bytes[i..i + 128].to_vec()));
         i += 128;
-        
+
         cuesheet.num_leadin = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
         i += 8;
 
@@ -480,7 +509,7 @@ impl CueSheet {
 
         Ok(cuesheet)
     }
-    
+
     /// Returns a vector representation of the cuesheet block suitable for writing to a file.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -488,7 +517,12 @@ impl CueSheet {
         assert!(self.catalog_num.len() <= 128);
 
         bytes.extend(self.catalog_num.clone().into_bytes().into_iter());
-        bytes.extend(repeat(0).take(128 - self.catalog_num.len()).collect::<Vec<u8>>().into_iter());
+        bytes.extend(
+            repeat(0)
+                .take(128 - self.catalog_num.len())
+                .collect::<Vec<u8>>()
+                .into_iter(),
+        );
         bytes.extend(::util::u64_to_be_bytes(self.num_leadin, 8).into_iter());
 
         if self.is_cd {
@@ -500,13 +534,17 @@ impl CueSheet {
         bytes.push(self.tracks.len() as u8);
 
         for track in self.tracks.iter() {
-
             assert!(track.isrc.len() <= 12);
 
             bytes.extend(::util::u64_to_be_bytes(track.offset, 8).into_iter());
             bytes.push(track.number);
             bytes.extend(track.isrc.clone().into_bytes().into_iter());
-            bytes.extend(repeat(0).take(12 - track.isrc.len()).collect::<Vec<u8>>().into_iter());
+            bytes.extend(
+                repeat(0)
+                    .take(12 - track.isrc.len())
+                    .collect::<Vec<u8>>()
+                    .into_iter(),
+            );
 
             let mut byte = 0;
             if !track.is_audio {
@@ -559,7 +597,7 @@ pub enum PictureType {
     BrightFish,
     Illustration,
     BandLogo,
-    PublisherLogo
+    PublisherLogo,
 }
 
 impl FromPrimitive for PictureType {
@@ -611,10 +649,10 @@ pub struct Picture {
     /// The color depth of the picture in bits-per-pixel.
     pub depth: u32,
     /// For indexed-color pictures (e.g. GIF), the number of colors used, or 0 for non-indexed
-    /// pictures. 
+    /// pictures.
     pub num_colors: u32,
     /// The binary picture data.
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl ::std::fmt::Debug for Picture {
@@ -626,10 +664,15 @@ impl ::std::fmt::Debug for Picture {
 impl Picture {
     /// Returns a new `Picture` with zero/empty values.
     pub fn new() -> Picture {
-        Picture { 
-            picture_type: PictureType::Other, mime_type: String::new(),
-            description: String::new(), width: 0, height: 0, depth: 0,
-            num_colors: 0, data: Vec::new()
+        Picture {
+            picture_type: PictureType::Other,
+            mime_type: String::new(),
+            description: String::new(),
+            width: 0,
+            height: 0,
+            depth: 0,
+            num_colors: 0,
+            data: Vec::new(),
         }
     }
 
@@ -643,7 +686,7 @@ impl Picture {
             Some(picture_type) => picture_type,
             None => {
                 debug!("encountered invalid picture type: {}", picture_type_u32);
-                return Err(Error::new(ErrorKind::InvalidInput, "invalid picture type"))
+                return Err(Error::new(ErrorKind::InvalidInput, "invalid picture type"));
             }
         };
         i += 4;
@@ -720,16 +763,20 @@ pub struct SeekPoint {
     /// target frame's header.
     offset: u64,
     /// Number of samples in the target frame.
-    num_samples: u16
+    num_samples: u16,
 }
 
 impl SeekPoint {
     /// Returns a new `SeekPoint` with all zero values.
     pub fn new() -> SeekPoint {
-        SeekPoint { sample_number: 0, offset: 0, num_samples: 0 }
+        SeekPoint {
+            sample_number: 0,
+            offset: 0,
+            num_samples: 0,
+        }
     }
 
-    /// Parses the bytes as a seekpoint. 
+    /// Parses the bytes as a seekpoint.
     pub fn from_bytes(bytes: &[u8]) -> SeekPoint {
         let mut seekpoint = SeekPoint::new();
         let mut i = 0;
@@ -750,8 +797,8 @@ impl SeekPoint {
         let mut bytes = Vec::new();
 
         bytes.extend(::util::u64_to_be_bytes(self.sample_number, 8).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.offset , 8).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.num_samples as u64 , 2).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.offset, 8).into_iter());
+        bytes.extend(::util::u64_to_be_bytes(self.num_samples as u64, 2).into_iter());
 
         bytes
     }
@@ -761,14 +808,16 @@ impl SeekPoint {
 /// A structure representing a SEEKTABLE block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SeekTable {
-    /// One or more seek points. 
-    pub seekpoints: Vec<SeekPoint>
+    /// One or more seek points.
+    pub seekpoints: Vec<SeekPoint>,
 }
 
 impl SeekTable {
     /// Returns a new `SeekTable` with no seekpoints.
     pub fn new() -> SeekTable {
-        SeekTable { seekpoints: Vec::new() }
+        SeekTable {
+            seekpoints: Vec::new(),
+        }
     }
 
     /// Parses the bytes as a seektable.
@@ -812,7 +861,10 @@ pub struct VorbisComment {
 impl VorbisComment {
     /// Returns a new `VorbisComment` with an empty vendor string and no comments.
     pub fn new() -> VorbisComment {
-        VorbisComment { vendor_string: String::new(), comments: HashMap::new() }
+        VorbisComment {
+            vendor_string: String::new(),
+            comments: HashMap::new(),
+        }
     }
 
     /// Attempts to parse the bytes as a vorbis comment block. Returns a `VorbisComment` on
@@ -844,7 +896,7 @@ impl VorbisComment {
             if vorbis.comments.contains_key(&key) {
                 vorbis.comments.get_mut(&key).unwrap().push(value);
             } else {
-                vorbis.comments.insert(key, vec!(value));
+                vorbis.comments.insert(key, vec![value]);
             }
         }
 
@@ -859,7 +911,7 @@ impl VorbisComment {
 
         bytes.extend(::util::u64_to_le_bytes(vendor_string.len() as u64, 4).into_iter());
         bytes.extend(vendor_string.into_iter());
-        
+
         bytes.extend(::util::u64_to_le_bytes(self.comments.len() as u64, 4).into_iter());
 
         for (key, list) in self.comments.iter() {
@@ -882,7 +934,8 @@ impl VorbisComment {
     pub fn set<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
         let key_owned = key.into();
         self.remove(&key_owned[..]);
-        self.comments.insert(key_owned, values.into_iter().map(|s| s.into()).collect());
+        self.comments
+            .insert(key_owned, values.into_iter().map(|s| s.into()).collect());
     }
 
     /// Removes the comments for the specified key.
@@ -891,10 +944,10 @@ impl VorbisComment {
     }
 
     /// Removes any matching key/value pairs.
-    pub fn remove_pair(&mut self, key: &str, value: &str) { 
+    pub fn remove_pair(&mut self, key: &str, value: &str) {
         match self.comments.get_mut(key) {
             Some(list) => list.retain(|s| &s[..] != value),
-            None => {} 
+            None => {}
         }
 
         let mut num_values = 0;
@@ -918,7 +971,7 @@ impl VorbisComment {
         self.remove("ARTISTSORT");
         self.set("ARTIST", artists);
     }
-    
+
     /// Removes all values with the ARTIST key. This will result in any ARTISTSORT comments being
     /// removed as well.
     pub fn remove_artist(&mut self) {
@@ -944,7 +997,7 @@ impl VorbisComment {
         self.remove("ALBUMSORT");
         self.remove("ALBUM");
     }
-   
+
     /// Returns a reference to the vector of values with the GENRE key.
     pub fn genre(&self) -> Option<&Vec<String>> {
         self.get("GENRE")
@@ -981,42 +1034,46 @@ impl VorbisComment {
 
     /// Attempts to convert the first TRACKNUMBER comment to a `u32`.
     pub fn track(&self) -> Option<u32> {
-        self.get("TRACKNUMBER").and_then(|s| if s.len() > 0 {
-            s[0].parse::<u32>().ok()
-        } else {
-            None
+        self.get("TRACKNUMBER").and_then(|s| {
+            if s.len() > 0 {
+                s[0].parse::<u32>().ok()
+            } else {
+                None
+            }
         })
     }
 
     /// Sets the TRACKNUMBER comment.
     pub fn set_track(&mut self, track: u32) {
-        self.set("TRACKNUMBER", vec!(format!("{}", track)));
+        self.set("TRACKNUMBER", vec![format!("{}", track)]);
     }
 
     /// Removes all values with the TRACKNUMBER key.
     pub fn remove_track(&mut self) {
         self.remove("TRACKNUMBER");
     }
-    
+
     /// Attempts to convert the first TOTALTRACKS comment to a `u32`.
     pub fn total_tracks(&self) -> Option<u32> {
-        self.get("TOTALTRACKS").and_then(|s| if s.len() > 0 {
-            s[0].parse::<u32>().ok()
-        } else {
-            None
+        self.get("TOTALTRACKS").and_then(|s| {
+            if s.len() > 0 {
+                s[0].parse::<u32>().ok()
+            } else {
+                None
+            }
         })
     }
 
     /// Sets the TOTALTRACKS comment.
     pub fn set_total_tracks(&mut self, total_tracks: u32) {
-        self.set("TOTALTRACKS", vec!(format!("{}", total_tracks)));
+        self.set("TOTALTRACKS", vec![format!("{}", total_tracks)]);
     }
 
     /// Removes all values with the TOTALTRACKS key.
     pub fn remove_total_tracks(&mut self) {
         self.remove("TOTALTRACKS");
     }
-   
+
     /// Returns a reference to the vector of values with the ALBUMARTIST key.
     pub fn album_artist(&self) -> Option<&Vec<String>> {
         self.get("ALBUMARTIST")

@@ -518,5 +518,4 @@ mod tests {
         tag.remove_vorbis("key");
         assert!(tag.get_vorbis("KEY").is_none());
     }
-
 }
