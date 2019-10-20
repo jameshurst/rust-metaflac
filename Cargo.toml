@@ -1,6 +1,6 @@
 [package]
 name = "metaflac"
-version = "0.1.9"
+version = "0.1.10"
 authors = ["James Hurst <james@jameshurst.ca>"]
 license = "MIT"
 readme = "README.md"
