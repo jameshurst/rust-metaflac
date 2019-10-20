@@ -19,7 +19,7 @@ pub struct Tag {
     length: u32,
 }
 
-impl Tag {
+impl<'a> Tag {
     /// Creates a new FLAC tag with no blocks.
     pub fn new() -> Tag {
         Tag {
@@ -35,19 +35,13 @@ impl Tag {
     }
 
     /// Returns a reference to the blocks in the tag.
-    pub fn blocks(&self) -> &Vec<Block> {
-        &self.blocks
+    pub fn blocks(&'a self) -> impl Iterator<Item = &'a Block> + 'a {
+        self.blocks.iter()
     }
 
     /// Returns references to the blocks with the specified type.
-    pub fn get_blocks(&self, block_type: BlockType) -> Vec<&Block> {
-        let mut out = Vec::new();
-        for block in self.blocks().iter() {
-            if block.block_type() == block_type {
-                out.push(block);
-            }
-        }
-        out
+    pub fn get_blocks(&'a self, block_type: BlockType) -> impl Iterator<Item = &'a Block> + 'a {
+        self.blocks().filter(move |block| block.block_type() == block_type)
     }
 
     /// Removes blocks with the specified type.
@@ -62,7 +56,7 @@ impl Tag {
     /// tag.push_block(Block::Padding(15));
     ///
     /// tag.remove_blocks(BlockType::Padding);
-    /// assert_eq!(tag.blocks().len(), 1);
+    /// assert_eq!(tag.blocks().count(), 1);
     /// ```
     pub fn remove_blocks(&mut self, block_type: BlockType) {
         self.blocks.retain(|b| b.block_type() != block_type);
@@ -83,7 +77,7 @@ impl Tag {
     /// assert!(tag.vorbis_comments().is_some());
     /// ```
     pub fn vorbis_comments(&self) -> Option<&VorbisComment> {
-        for block in self.blocks.iter() {
+        for block in self.blocks() {
             match *block {
                 Block::VorbisComment(ref comm) => return Some(comm),
                 _ => {}
@@ -144,11 +138,12 @@ impl Tag {
     ///
     /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     ///
-    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
     /// ```
-    pub fn get_vorbis(&self, key: &str) -> Option<&Vec<String>> {
+    pub fn get_vorbis(&'a self, key: &str) -> Option<impl Iterator<Item = &'a str> + 'a> {
         self.vorbis_comments()
             .and_then(|c| c.get(&key.to_ascii_uppercase()))
+            .map(|l| l.iter().map(|s| s.as_ref()))
     }
 
     /// Sets the values for the specified vorbis comment key.
@@ -165,7 +160,7 @@ impl Tag {
     ///
     /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
     ///
-    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
     /// ```
     pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
         self.vorbis_comments_mut()
@@ -185,7 +180,7 @@ impl Tag {
     /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
-    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
     ///
     /// tag.remove_vorbis(&key);
     /// assert!(tag.get_vorbis(&key).is_none());
@@ -209,10 +204,10 @@ impl Tag {
     /// let value2 = "value2".to_owned();
     ///
     /// tag.set_vorbis(key.clone(), vec!(&value1[..], &value2[..]));
-    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
     ///
     /// tag.remove_vorbis_pair(&key, &value1);
-    /// assert_eq!(&tag.get_vorbis(&key).unwrap()[..], &[&value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value2[..]]);
     /// ```
     pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
         self.vorbis_comments_mut()
@@ -227,21 +222,19 @@ impl Tag {
     /// use metaflac::block::PictureType::CoverFront;
     ///
     /// let mut tag = Tag::new();
-    /// assert_eq!(tag.pictures().len(), 0);
+    /// assert_eq!(tag.pictures().count(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     ///
-    /// assert_eq!(tag.pictures().len(), 1);
+    /// assert_eq!(tag.pictures().count(), 1);
     /// ```
-    pub fn pictures(&self) -> Vec<&Picture> {
-        let mut pictures = Vec::new();
-        for block in self.blocks.iter() {
+    pub fn pictures(&'a self) -> impl Iterator<Item = &'a Picture> + 'a {
+        return self.blocks.iter().filter_map(|block|
             match *block {
-                Block::Picture(ref picture) => pictures.push(picture),
-                _ => {}
+                Block::Picture(ref picture) => Some(picture),
+                _ => None
             }
-        }
-        pictures
+        )
     }
 
     /// Adds a picture block.
@@ -252,13 +245,14 @@ impl Tag {
     /// use metaflac::block::PictureType::CoverFront;
     ///
     /// let mut tag = Tag::new();
-    /// assert_eq!(tag.pictures().len(), 0);
+    /// assert_eq!(tag.pictures().count(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     ///
-    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/jpeg");
-    /// assert_eq!(tag.pictures()[0].picture_type, CoverFront);
-    /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xFF)[..]);
+    /// let picture = tag.pictures().next().unwrap();
+    /// assert_eq!(&picture.mime_type[..], "image/jpeg");
+    /// assert_eq!(picture.picture_type, CoverFront);
+    /// assert_eq!(&picture.data[..], &vec!(0xFF)[..]);
     /// ```
     pub fn add_picture<T: Into<String>>(
         &mut self,
@@ -284,18 +278,19 @@ impl Tag {
     /// use metaflac::block::PictureType::{CoverFront, Other};
     ///
     /// let mut tag = Tag::new();
-    /// assert_eq!(tag.pictures().len(), 0);
+    /// assert_eq!(tag.pictures().count(), 0);
     ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     /// tag.add_picture("image/png", Other, vec!(0xAB));
-    /// assert_eq!(tag.pictures().len(), 2);
+    /// assert_eq!(tag.pictures().count(), 2);
     ///
     /// tag.remove_picture_type(CoverFront);
-    /// assert_eq!(tag.pictures().len(), 1);
+    /// assert_eq!(tag.pictures().count(), 1);
     ///
-    /// assert_eq!(&tag.pictures()[0].mime_type[..], "image/png");
-    /// assert_eq!(tag.pictures()[0].picture_type, Other);
-    /// assert_eq!(&tag.pictures()[0].data[..], &vec!(0xAB)[..]);
+    /// let picture = tag.pictures().next().unwrap();
+    /// assert_eq!(&picture.mime_type[..], "image/png");
+    /// assert_eq!(picture.picture_type, Other);
+    /// assert_eq!(&picture.data[..], &vec!(0xAB)[..]);
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         self.blocks.retain(|block: &Block| match *block {
@@ -511,8 +506,8 @@ mod tests {
 
         tag.set_vorbis("KEY", vec!["value"]);
 
-        assert_eq!(&tag.get_vorbis("KEY").unwrap()[..], &["value"]);
-        assert_eq!(&tag.get_vorbis("key").unwrap()[..], &["value"]);
+        assert_eq!(tag.get_vorbis("KEY").unwrap().collect::<Vec<_>>(), &["value"]);
+        assert_eq!(tag.get_vorbis("key").unwrap().collect::<Vec<_>>(), &["value"]);
 
         tag.remove_vorbis("key");
         assert!(tag.get_vorbis("KEY").is_none());
