@@ -348,7 +348,7 @@ impl Tag {
                 more = ((header >> 24) & 0x80) == 0;
                 let length = header & 0xFF_FF_FF;
 
-                debug!("skipping {} bytes", length);
+                debug!("Skipping {} bytes", length);
                 try_io!(reader, reader.seek(SeekFrom::Current(length as i64)));
             }
         } else {
@@ -403,7 +403,7 @@ impl Tag {
         Ok(tag)
     }
 
-    /// Attempts to write the FLAC tag to the wrier.
+    /// Attempts to write the FLAC tag to the writer.
     pub fn write_to(&mut self, writer: &mut dyn Write) -> Result<()> {
         try!(writer.write(b"fLaC"));
 
@@ -438,7 +438,7 @@ impl Tag {
             && path.as_ref() == self.path.as_ref().unwrap().as_path()
             && new_length + 4 <= self.length
         {
-            debug!("writing using padding");
+            debug!("Writing using padding");
             let mut file = try!(OpenOptions::new()
                 .write(true)
                 .open(self.path.as_ref().unwrap()));
@@ -448,13 +448,12 @@ impl Tag {
                 try!(file.write(&bytes[..]));
             }
 
-            debug!("{} bytes of padding", self.length - new_length - 4);
             let padding = Block::Padding(self.length - new_length - 4);
             try!(padding.write_to(true, &mut file));
             self.push_block(padding);
         } else {
             // write by copying file data
-            debug!("writing to new file");
+            debug!("Writing to new file");
 
             let data_opt = {
                 match File::open(&path) {
@@ -476,7 +475,7 @@ impl Tag {
             }
 
             let padding_size = 1024;
-            debug!("adding {} bytes of padding", padding_size);
+            debug!("Adding {} bytes of padding", padding_size);
             let padding = Block::Padding(padding_size);
             new_length += try!(padding.write_to(true, &mut file));
             self.push_block(padding);

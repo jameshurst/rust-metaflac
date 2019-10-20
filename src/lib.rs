@@ -16,4 +16,3 @@ pub mod block;
 
 mod error;
 mod tag;
-mod util;

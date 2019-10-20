@@ -4,10 +4,11 @@ extern crate num;
 
 use error::{Error, ErrorKind, Result};
 
-use self::byteorder::{BigEndian, ReadBytesExt};
+use self::byteorder::{ReadBytesExt, WriteBytesExt, BE};
 use self::num::{FromPrimitive, ToPrimitive};
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::io::{Read, Write};
 use std::iter::repeat;
 
@@ -92,19 +93,13 @@ impl Block {
     /// Attempts to read a block from the reader. Returns a tuple containing a boolean indicating
     /// if the block was the last block, the length of the block in bytes, and the new `Block`.
     pub fn read_from(reader: &mut dyn Read) -> Result<(bool, u32, Block)> {
-        let header = try!(reader.read_u32::<BigEndian>());
-
-        let is_last = ((header >> 24) & 0x80) != 0;
-
-        let blocktype_byte = (header >> 24) as u8 & 0x7F;
+        let byte = try!(reader.read_u8());
+        let is_last = (byte & 0x80) != 0;
+        let blocktype_byte = byte & 0x7F;
         let blocktype = BlockType::from_u8(blocktype_byte).unwrap();
+        let length = try!(reader.read_uint::<BE>(3)) as u32;
 
-        let length = header & 0xFF_FF_FF;
-
-        debug!(
-            "reading {} bytes for type {:?} ({})",
-            length, blocktype, blocktype_byte
-        );
+        debug!("Reading block {:?} with {} bytes", blocktype, length);
 
         let mut data = Vec::new();
         reader.take(length as u64).read_to_end(&mut data).unwrap();
@@ -158,27 +153,30 @@ impl Block {
             Block::Unknown((_, ref bytes)) => (bytes.len() as u32, Some(bytes.clone())),
         };
 
-        let mut header: u32 = 0;
-        if is_last {
-            header |= 0x80u32 << 24;
-        }
-        header |= (self.block_type().to_u32().unwrap() & 0x7F) << 24;
-        header |= content_len & 0xFF_FF_FF;
+        debug!(
+            "Writing block {:?} with {} bytes",
+            self.block_type(),
+            content_len
+        );
 
-        try!(writer.write_all(&::util::u64_to_be_bytes(header as u64, 4)[..]));
+        let mut byte: u8 = 0;
+        if is_last {
+            byte |= 0x80;
+        }
+        byte |= self.block_type().to_u8().unwrap() & 0x7F;
+        try!(writer.write_u8(byte));
+        try!(writer.write_all(&content_len.to_be_bytes()[1..]));
 
         match contents {
             Some(bytes) => try!(writer.write_all(&bytes[..])),
             None => {
-                let zeroes = [0u8; 1024];
+                let zeroes = [0; 1024];
                 let mut remaining = content_len as usize;
                 loop {
                     if remaining <= zeroes.len() {
-                        debug!("writing {} bytes of padding", remaining);
                         try!(writer.write_all(&zeroes[..remaining]));
                         break;
                     } else {
-                        debug!("writing {} bytes of padding", zeroes.len());
                         try!(writer.write_all(&zeroes[..]));
                         remaining -= zeroes.len();
                     }
@@ -255,30 +253,37 @@ impl StreamInfo {
         let mut streaminfo = StreamInfo::new();
         let mut i = 0;
 
-        streaminfo.min_block_size = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        streaminfo.min_block_size =
+            u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
         i += 2;
 
-        streaminfo.max_block_size = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        streaminfo.max_block_size =
+            u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
         i += 2;
 
-        streaminfo.min_frame_size = ::util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
+        streaminfo.min_frame_size = (&bytes[i..i + 3]).read_uint::<BE>(3).unwrap() as u32;
         i += 3;
 
-        streaminfo.max_frame_size = ::util::bytes_to_be_u64(&bytes[i..i + 3]) as u32;
+        streaminfo.max_frame_size = (&bytes[i..i + 3]).read_uint::<BE>(3).unwrap() as u32;
         i += 3;
 
-        streaminfo.sample_rate = ((::util::bytes_to_be_u64(&bytes[i..i + 2]) as u32) << 4)
-            | ((bytes[i + 2] as u32 & 0xF0) >> 4);
+        // first 16 bits of sample rate
+        let sample_first = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
         i += 2;
 
-        streaminfo.num_channels = ((bytes[i] & 0x0E) >> 1) + 1;
-
-        streaminfo.bits_per_sample = (((bytes[i] & 0x01) << 4) | ((bytes[i + 1] & 0xF0) >> 4)) + 1;
+        // last 4 bits of sample rate, 3 bits of channel, first bit of bits/sample
+        let sample_channel_bps = bytes[i];
         i += 1;
 
-        streaminfo.total_samples = ((bytes[i] as u64 & 0x0F) << 32)
-            | ::util::bytes_to_be_u64(&bytes[i + 1..i + 1 + 4]) as u64;
+        streaminfo.sample_rate = (sample_first as u32) << 4 | (sample_channel_bps as u32) >> 4;
+        streaminfo.num_channels = ((sample_channel_bps >> 1) & 0x7) + 1;
+
+        // last 4 bits of bits/sample, 36 bits of total samples
+        let bps_total = (&bytes[i..i + 5]).read_uint::<BE>(5).unwrap();
         i += 5;
+
+        streaminfo.bits_per_sample = ((sample_channel_bps & 0x1) << 4 | (bps_total >> 36) as u8) + 1;
+        streaminfo.total_samples = bps_total & 0xF_FF_FF_FF_FF;
 
         streaminfo.md5 = bytes[i..i + 16].to_vec();
 
@@ -289,22 +294,28 @@ impl StreamInfo {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(::util::u64_to_be_bytes(self.min_block_size as u64, 2).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.max_block_size as u64, 2).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.min_frame_size as u64, 3).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.max_frame_size as u64, 3).into_iter());
-        bytes.extend(::util::u64_to_be_bytes((self.sample_rate >> 4) as u64, 2).into_iter());
+        bytes.extend(self.min_block_size.to_be_bytes().into_iter());
+        bytes.extend(self.max_block_size.to_be_bytes().into_iter());
+        bytes.extend(self.min_frame_size.to_be_bytes()[1..].into_iter());
+        bytes.extend(self.max_frame_size.to_be_bytes()[1..].into_iter());
 
-        let byte = ((self.sample_rate << 4) & 0xF0) as u8
-            | (((self.num_channels - 1) << 1) & 0x0E) as u8
-            | (((self.bits_per_sample - 1) >> 4) & 0x01) as u8;
+        // first 16 bits of sample rate
+        bytes.extend(((self.sample_rate >> 4) as u16).to_be_bytes().into_iter());
+
+        // last 4 bits of sample rate, 3 bits of channel, first bit of bits/sample
+        let byte = ((self.sample_rate & 0xF) << 4) as u8
+            | (((self.num_channels - 1) & 0x7) << 1) as u8
+            | (((self.bits_per_sample - 1) >> 4) & 0x1) as u8;
         bytes.push(byte);
 
-        let byte = (((self.bits_per_sample - 1) << 4) & 0xF0) as u8
-            | ((self.total_samples >> 32) & 0x0F) as u8;
+        // last 4 bits of bits/sample, first 4 bits of sample count
+        let byte = (((self.bits_per_sample - 1) & 0xF) << 4) as u8
+            | ((self.total_samples >> 32) & 0xF) as u8;
         bytes.push(byte);
 
-        bytes.extend(::util::u64_to_be_bytes(self.total_samples & 0xFF_FF_FF_FF, 4).into_iter());
+        // last 32 bits of sample count
+        bytes.extend(((self.total_samples & 0xFF_FF_FF_FF) as u32).to_be_bytes().into_iter());
+
         bytes.extend(self.md5.iter().cloned());
 
         bytes
@@ -453,13 +464,13 @@ impl CueSheet {
         cuesheet.catalog_num = try!(String::from_utf8(bytes[i..i + 128].to_vec()));
         i += 128;
 
-        cuesheet.num_leadin = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
+        cuesheet.num_leadin = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
         i += 8;
 
-        let byte = bytes[i];
+        let flags = bytes[i];
         i += 1;
 
-        cuesheet.is_cd = (byte & 0x80) != 0;
+        cuesheet.is_cd = (flags & 0x80) != 0;
 
         i += 258;
 
@@ -469,7 +480,7 @@ impl CueSheet {
         for _ in 0..num_tracks {
             let mut track = CueSheetTrack::new();
 
-            track.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
+            track.offset = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
             i += 8;
 
             track.number = bytes[i];
@@ -478,12 +489,12 @@ impl CueSheet {
             track.isrc = try!(String::from_utf8(bytes[i..i + 12].to_vec()));
             i += 12;
 
-            let byte = bytes[i];
+            let flags = bytes[i];
             i += 1;
 
-            track.is_audio = (byte & 0x80) == 0;
+            track.is_audio = (flags & 0x80) == 0;
 
-            track.pre_emphasis = (byte & 0x70) != 0;
+            track.pre_emphasis = (flags & 0x40) != 0;
 
             i += 13;
 
@@ -493,7 +504,7 @@ impl CueSheet {
             for _ in 0..num_indices {
                 let mut index = CueSheetTrackIndex::new();
 
-                index.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
+                index.offset = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
                 i += 8;
 
                 index.point_num = bytes[i];
@@ -523,11 +534,13 @@ impl CueSheet {
                 .collect::<Vec<u8>>()
                 .into_iter(),
         );
-        bytes.extend(::util::u64_to_be_bytes(self.num_leadin, 8).into_iter());
+        bytes.extend(self.num_leadin.to_be_bytes().into_iter());
 
+        let mut flags = 0;
         if self.is_cd {
-            bytes.push(0x80);
+            flags |= 0x80;
         }
+        bytes.push(flags);
 
         bytes.extend([0; 258].iter().cloned());
 
@@ -536,7 +549,7 @@ impl CueSheet {
         for track in self.tracks.iter() {
             assert!(track.isrc.len() <= 12);
 
-            bytes.extend(::util::u64_to_be_bytes(track.offset, 8).into_iter());
+            bytes.extend(track.offset.to_be_bytes().into_iter());
             bytes.push(track.number);
             bytes.extend(track.isrc.clone().into_bytes().into_iter());
             bytes.extend(
@@ -546,21 +559,21 @@ impl CueSheet {
                     .into_iter(),
             );
 
-            let mut byte = 0;
+            let mut flags = 0;
             if !track.is_audio {
-                byte |= 0x80;
+                flags |= 0x80;
             }
             if track.pre_emphasis {
-                byte |= 0x70;
+                flags |= 0x40;
             }
-            bytes.push(byte);
+            bytes.push(flags);
 
             bytes.extend([0; 13].iter().cloned());
 
             bytes.push(track.indices.len() as u8);
 
             for index in track.indices.iter() {
-                bytes.extend(::util::u64_to_be_bytes(index.offset, 8).into_iter());
+                bytes.extend(index.offset.to_be_bytes().into_iter());
                 bytes.push(index.point_num);
                 bytes.extend([0; 3].iter().cloned());
             }
@@ -681,41 +694,42 @@ impl Picture {
         let mut picture = Picture::new();
         let mut i = 0;
 
-        let picture_type_u32 = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        let picture_type_u32 = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
         picture.picture_type = match PictureType::from_u32(picture_type_u32) {
             Some(picture_type) => picture_type,
             None => {
-                debug!("encountered invalid picture type: {}", picture_type_u32);
+                debug!("Encountered invalid picture type: {}", picture_type_u32);
                 return Err(Error::new(ErrorKind::InvalidInput, "invalid picture type"));
             }
         };
         i += 4;
 
-        let mime_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let mime_length = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
         picture.mime_type = try!(String::from_utf8(bytes[i..i + mime_length].to_vec()));
         i += mime_length;
 
-        let description_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let description_length =
+            u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
         picture.description = try!(String::from_utf8(bytes[i..i + description_length].to_vec()));
         i += description_length;
 
-        picture.width = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.width = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
         i += 4;
 
-        picture.height = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.height = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
         i += 4;
 
-        picture.depth = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.depth = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
         i += 4;
 
-        picture.num_colors = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as u32;
+        picture.num_colors = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
         i += 4;
 
-        let data_length = ::util::bytes_to_be_u64(&bytes[i..i + 4]) as usize;
+        let data_length = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
         picture.data = bytes[i..i + data_length].to_vec();
@@ -727,23 +741,23 @@ impl Picture {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(::util::u64_to_be_bytes(self.picture_type as u64, 4).into_iter());
+        bytes.extend((self.picture_type as u32).to_be_bytes().into_iter());
 
         let mime_type = self.mime_type.clone().into_bytes();
-        bytes.extend(::util::u64_to_be_bytes(mime_type.len() as u64, 4).into_iter());
+        bytes.extend((mime_type.len() as u32).to_be_bytes().into_iter());
         bytes.extend(mime_type.into_iter());
 
         let description = self.description.clone().into_bytes();
-        bytes.extend(::util::u64_to_be_bytes(description.len() as u64, 4).into_iter());
+        bytes.extend((description.len() as u32).to_be_bytes().into_iter());
         bytes.extend(description.into_iter());
 
-        bytes.extend(::util::u64_to_be_bytes(self.width as u64, 4).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.height as u64, 4).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.depth as u64, 4).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.num_colors as u64, 4).into_iter());
+        bytes.extend(self.width.to_be_bytes().into_iter());
+        bytes.extend(self.height.to_be_bytes().into_iter());
+        bytes.extend(self.depth.to_be_bytes().into_iter());
+        bytes.extend(self.num_colors.to_be_bytes().into_iter());
 
         let data = self.data.clone();
-        bytes.extend(::util::u64_to_be_bytes(data.len() as u64, 4).into_iter());
+        bytes.extend((data.len() as u32).to_be_bytes().into_iter());
         bytes.extend(data.into_iter());
 
         bytes
@@ -781,13 +795,13 @@ impl SeekPoint {
         let mut seekpoint = SeekPoint::new();
         let mut i = 0;
 
-        seekpoint.sample_number = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
+        seekpoint.sample_number = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
         i += 8;
 
-        seekpoint.offset = ::util::bytes_to_be_u64(&bytes[i..i + 8]);
+        seekpoint.offset = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
         i += 8;
 
-        seekpoint.num_samples = ::util::bytes_to_be_u64(&bytes[i..i + 2]) as u16;
+        seekpoint.num_samples = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap());
 
         seekpoint
     }
@@ -796,9 +810,9 @@ impl SeekPoint {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(::util::u64_to_be_bytes(self.sample_number, 8).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.offset, 8).into_iter());
-        bytes.extend(::util::u64_to_be_bytes(self.num_samples as u64, 2).into_iter());
+        bytes.extend(self.sample_number.to_be_bytes().into_iter());
+        bytes.extend(self.offset.to_be_bytes().into_iter());
+        bytes.extend(self.num_samples.to_be_bytes().into_iter());
 
         bytes
     }
@@ -873,17 +887,18 @@ impl VorbisComment {
         let mut vorbis = VorbisComment::new();
         let mut i = 0;
 
-        let vendor_length = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+        let vendor_length = u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
         vorbis.vendor_string = try!(String::from_utf8(bytes[i..i + vendor_length].to_vec()));
         i += vendor_length;
 
-        let num_comments = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+        let num_comments = u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap());
         i += 4;
 
         for _ in 0..num_comments {
-            let comment_length = ::util::bytes_to_le_u64(&bytes[i..i + 4]) as usize;
+            let comment_length =
+                u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
             i += 4;
 
             let comments = try!(String::from_utf8(bytes[i..i + comment_length].to_vec()));
@@ -909,15 +924,24 @@ impl VorbisComment {
 
         let vendor_string = self.vendor_string.clone().into_bytes();
 
-        bytes.extend(::util::u64_to_le_bytes(vendor_string.len() as u64, 4).into_iter());
+        bytes.extend((vendor_string.len() as u32).to_le_bytes().into_iter());
         bytes.extend(vendor_string.into_iter());
 
-        bytes.extend(::util::u64_to_le_bytes(self.comments.len() as u64, 4).into_iter());
+        bytes.extend(
+            (self
+                .comments
+                .values()
+                .fold(0u32, |acc, l| acc + l.len() as u32))
+            .to_le_bytes()
+            .into_iter(),
+        );
 
         for (key, list) in self.comments.iter() {
             for value in list.iter() {
-                let comment = format!("{}={}", key, value).into_bytes();
-                bytes.extend(::util::u64_to_le_bytes(comment.len() as u64, 4).into_iter());
+                let comment_string = format!("{}={}", key, value);
+                debug!("Writing comment: {}", comment_string);
+                let comment = comment_string.into_bytes();
+                bytes.extend((comment.len() as u32).to_le_bytes().into_iter());
                 bytes.extend(comment.into_iter());
             }
         }
