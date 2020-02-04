@@ -148,7 +148,7 @@ impl Block {
         if is_last {
             byte |= 0x80;
         }
-      
+
         byte |= self.block_type().to_u8() & 0x7F;
         writer.write_u8(byte)?;
         writer.write_all(&content_len.to_be_bytes()[1..])?;
@@ -281,13 +281,13 @@ impl StreamInfo {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(self.min_block_size.to_be_bytes().into_iter());
-        bytes.extend(self.max_block_size.to_be_bytes().into_iter());
-        bytes.extend(self.min_frame_size.to_be_bytes()[1..].into_iter());
-        bytes.extend(self.max_frame_size.to_be_bytes()[1..].into_iter());
+        bytes.extend(self.min_block_size.to_be_bytes().iter());
+        bytes.extend(self.max_block_size.to_be_bytes().iter());
+        bytes.extend(self.min_frame_size.to_be_bytes()[1..].iter());
+        bytes.extend(self.max_frame_size.to_be_bytes()[1..].iter());
 
         // first 16 bits of sample rate
-        bytes.extend(((self.sample_rate >> 4) as u16).to_be_bytes().into_iter());
+        bytes.extend(((self.sample_rate >> 4) as u16).to_be_bytes().iter());
 
         // last 4 bits of sample rate, 3 bits of channel, first bit of bits/sample
         let byte = ((self.sample_rate & 0xF) << 4) as u8
@@ -304,7 +304,7 @@ impl StreamInfo {
         bytes.extend(
             ((self.total_samples & 0xFF_FF_FF_FF) as u32)
                 .to_be_bytes()
-                .into_iter(),
+                .iter(),
         );
 
         bytes.extend(self.md5.iter().cloned());
@@ -525,7 +525,7 @@ impl CueSheet {
                 .collect::<Vec<u8>>()
                 .into_iter(),
         );
-        bytes.extend(self.num_leadin.to_be_bytes().into_iter());
+        bytes.extend(self.num_leadin.to_be_bytes().iter());
 
         let mut flags = 0;
         if self.is_cd {
@@ -540,7 +540,7 @@ impl CueSheet {
         for track in self.tracks.iter() {
             assert!(track.isrc.len() <= 12);
 
-            bytes.extend(track.offset.to_be_bytes().into_iter());
+            bytes.extend(track.offset.to_be_bytes().iter());
             bytes.push(track.number);
             bytes.extend(track.isrc.clone().into_bytes().into_iter());
             bytes.extend(
@@ -564,7 +564,7 @@ impl CueSheet {
             bytes.push(track.indices.len() as u8);
 
             for index in track.indices.iter() {
-                bytes.extend(index.offset.to_be_bytes().into_iter());
+                bytes.extend(index.offset.to_be_bytes().iter());
                 bytes.push(index.point_num);
                 bytes.extend([0; 3].iter().cloned());
             }
@@ -728,23 +728,23 @@ impl Picture {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend((self.picture_type as u32).to_be_bytes().into_iter());
+        bytes.extend((self.picture_type as u32).to_be_bytes().iter());
 
         let mime_type = self.mime_type.clone().into_bytes();
-        bytes.extend((mime_type.len() as u32).to_be_bytes().into_iter());
+        bytes.extend((mime_type.len() as u32).to_be_bytes().iter());
         bytes.extend(mime_type.into_iter());
 
         let description = self.description.clone().into_bytes();
-        bytes.extend((description.len() as u32).to_be_bytes().into_iter());
+        bytes.extend((description.len() as u32).to_be_bytes().iter());
         bytes.extend(description.into_iter());
 
-        bytes.extend(self.width.to_be_bytes().into_iter());
-        bytes.extend(self.height.to_be_bytes().into_iter());
-        bytes.extend(self.depth.to_be_bytes().into_iter());
-        bytes.extend(self.num_colors.to_be_bytes().into_iter());
+        bytes.extend(self.width.to_be_bytes().iter());
+        bytes.extend(self.height.to_be_bytes().iter());
+        bytes.extend(self.depth.to_be_bytes().iter());
+        bytes.extend(self.num_colors.to_be_bytes().iter());
 
         let data = self.data.clone();
-        bytes.extend((data.len() as u32).to_be_bytes().into_iter());
+        bytes.extend((data.len() as u32).to_be_bytes().iter());
         bytes.extend(data.into_iter());
 
         bytes
@@ -797,9 +797,9 @@ impl SeekPoint {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend(self.sample_number.to_be_bytes().into_iter());
-        bytes.extend(self.offset.to_be_bytes().into_iter());
-        bytes.extend(self.num_samples.to_be_bytes().into_iter());
+        bytes.extend(self.sample_number.to_be_bytes().iter());
+        bytes.extend(self.offset.to_be_bytes().iter());
+        bytes.extend(self.num_samples.to_be_bytes().iter());
 
         bytes
     }
@@ -911,7 +911,7 @@ impl VorbisComment {
 
         let vendor_string = self.vendor_string.clone().into_bytes();
 
-        bytes.extend((vendor_string.len() as u32).to_le_bytes().into_iter());
+        bytes.extend((vendor_string.len() as u32).to_le_bytes().iter());
         bytes.extend(vendor_string.into_iter());
 
         bytes.extend(
@@ -920,7 +920,7 @@ impl VorbisComment {
                 .values()
                 .fold(0u32, |acc, l| acc + l.len() as u32))
             .to_le_bytes()
-            .into_iter(),
+            .iter(),
         );
 
         for (key, list) in self.comments.iter() {
@@ -928,7 +928,7 @@ impl VorbisComment {
                 let comment_string = format!("{}={}", key, value);
                 debug!("Writing comment: {}", comment_string);
                 let comment = comment_string.into_bytes();
-                bytes.extend((comment.len() as u32).to_le_bytes().into_iter());
+                bytes.extend((comment.len() as u32).to_le_bytes().iter());
                 bytes.extend(comment.into_iter());
             }
         }

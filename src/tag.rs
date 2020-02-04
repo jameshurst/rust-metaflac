@@ -41,7 +41,8 @@ impl<'a> Tag {
 
     /// Returns references to the blocks with the specified type.
     pub fn get_blocks(&'a self, block_type: BlockType) -> impl Iterator<Item = &'a Block> + 'a {
-        self.blocks().filter(move |block| block.block_type() == block_type)
+        self.blocks()
+            .filter(move |block| block.block_type() == block_type)
     }
 
     /// Removes blocks with the specified type.
@@ -229,12 +230,10 @@ impl<'a> Tag {
     /// assert_eq!(tag.pictures().count(), 1);
     /// ```
     pub fn pictures(&'a self) -> impl Iterator<Item = &'a Picture> + 'a {
-        return self.blocks.iter().filter_map(|block|
-            match *block {
-                Block::Picture(ref picture) => Some(picture),
-                _ => None
-            }
-        )
+        return self.blocks.iter().filter_map(|block| match *block {
+            Block::Picture(ref picture) => Some(picture),
+            _ => None,
+        });
     }
 
     /// Adds a picture block.
@@ -506,8 +505,14 @@ mod tests {
 
         tag.set_vorbis("KEY", vec!["value"]);
 
-        assert_eq!(tag.get_vorbis("KEY").unwrap().collect::<Vec<_>>(), &["value"]);
-        assert_eq!(tag.get_vorbis("key").unwrap().collect::<Vec<_>>(), &["value"]);
+        assert_eq!(
+            tag.get_vorbis("KEY").unwrap().collect::<Vec<_>>(),
+            &["value"]
+        );
+        assert_eq!(
+            tag.get_vorbis("key").unwrap().collect::<Vec<_>>(),
+            &["value"]
+        );
 
         tag.remove_vorbis("key");
         assert!(tag.get_vorbis("KEY").is_none());
