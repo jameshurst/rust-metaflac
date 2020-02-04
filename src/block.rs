@@ -1,11 +1,9 @@
 extern crate byteorder;
 extern crate hex;
-extern crate num;
 
 use error::{Error, ErrorKind, Result};
 
 use self::byteorder::{ReadBytesExt, WriteBytesExt, BE};
-use self::num::{FromPrimitive, ToPrimitive};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -28,13 +26,9 @@ pub enum BlockType {
 }
 
 #[allow(missing_docs)]
-impl ToPrimitive for BlockType {
-    fn to_i64(&self) -> Option<i64> {
-        self.to_u64().and_then(|n| Some(n as i64))
-    }
-
-    fn to_u64(&self) -> Option<u64> {
-        Some(match *self {
+impl BlockType {
+    fn to_u8(&self) -> u8 {
+        match *self {
             BlockType::StreamInfo => 0,
             BlockType::Padding => 1,
             BlockType::Application => 2,
@@ -42,19 +36,12 @@ impl ToPrimitive for BlockType {
             BlockType::VorbisComment => 4,
             BlockType::CueSheet => 5,
             BlockType::Picture => 6,
-            BlockType::Unknown(n) => n as u64,
-        })
-    }
-}
-
-#[allow(missing_docs)]
-impl FromPrimitive for BlockType {
-    fn from_i64(n: i64) -> Option<BlockType> {
-        FromPrimitive::from_u64(n as u64)
+            BlockType::Unknown(n) => n as u8,
+        }
     }
 
-    fn from_u64(n: u64) -> Option<BlockType> {
-        Some(match n {
+    fn from_u8(n: u8) -> BlockType {
+        match n {
             0 => BlockType::StreamInfo,
             1 => BlockType::Padding,
             2 => BlockType::Application,
@@ -62,8 +49,8 @@ impl FromPrimitive for BlockType {
             4 => BlockType::VorbisComment,
             5 => BlockType::CueSheet,
             6 => BlockType::Picture,
-            n => BlockType::Unknown(n as u8),
-        })
+            n => BlockType::Unknown(n),
+        }
     }
 }
 // }}}
@@ -96,7 +83,7 @@ impl Block {
         let byte = try!(reader.read_u8());
         let is_last = (byte & 0x80) != 0;
         let blocktype_byte = byte & 0x7F;
-        let blocktype = BlockType::from_u8(blocktype_byte).unwrap();
+        let blocktype = BlockType::from_u8(blocktype_byte);
         let length = try!(reader.read_uint::<BE>(3)) as u32;
 
         debug!("Reading block {:?} with {} bytes", blocktype, length);
@@ -163,7 +150,7 @@ impl Block {
         if is_last {
             byte |= 0x80;
         }
-        byte |= self.block_type().to_u8().unwrap() & 0x7F;
+        byte |= self.block_type().to_u8() & 0x7F;
         try!(writer.write_u8(byte));
         try!(writer.write_all(&content_len.to_be_bytes()[1..]));
 
@@ -613,12 +600,8 @@ pub enum PictureType {
     PublisherLogo,
 }
 
-impl FromPrimitive for PictureType {
-    fn from_i64(n: i64) -> Option<PictureType> {
-        FromPrimitive::from_u64(n as u64)
-    }
-
-    fn from_u64(n: u64) -> Option<PictureType> {
+impl PictureType {
+    fn from_u32(n: u32) -> Option<PictureType> {
         match n {
             0 => Some(PictureType::Other),
             1 => Some(PictureType::Icon),
