@@ -378,7 +378,7 @@ impl<'a> Tag {
         let mut tag = Tag::new();
 
         let mut ident = [0; 4];
-        try!(reader.read(&mut ident));
+        reader.read(&mut ident)?;
         if &ident[..] != b"fLaC" {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -387,7 +387,7 @@ impl<'a> Tag {
         }
 
         loop {
-            let (is_last, length, block) = try!(Block::read_from(reader));
+            let (is_last, length, block) = Block::read_from(reader)?;
             tag.length += length;
             tag.blocks.push(block);
             if is_last {
@@ -400,13 +400,13 @@ impl<'a> Tag {
 
     /// Attempts to write the FLAC tag to the writer.
     pub fn write_to(&mut self, writer: &mut dyn Write) -> Result<()> {
-        try!(writer.write(b"fLaC"));
+        writer.write(b"fLaC")?;
 
         let nblocks = self.blocks.len();
         self.length = 0;
         for i in 0..nblocks {
             let block = &self.blocks[i];
-            self.length += try!(block.write_to(i == nblocks - 1, writer));
+            self.length += block.write_to(i == nblocks - 1, writer)?;
         }
 
         Ok(())
@@ -424,7 +424,7 @@ impl<'a> Tag {
         for i in 0..nblocks {
             let block = &self.blocks[i];
             let mut writer = Vec::<u8>::new();
-            new_length += try!(block.write_to(false, &mut writer));
+            new_length += block.write_to(false, &mut writer)?;
             block_bytes.push(writer);
         }
 
@@ -434,17 +434,17 @@ impl<'a> Tag {
             && new_length + 4 <= self.length
         {
             debug!("Writing using padding");
-            let mut file = try!(OpenOptions::new()
+            let mut file = OpenOptions::new()
                 .write(true)
-                .open(self.path.as_ref().unwrap()));
-            try!(file.seek(SeekFrom::Start(4)));
+                .open(self.path.as_ref().unwrap())?;
+            file.seek(SeekFrom::Start(4))?;
 
             for bytes in block_bytes.iter() {
-                try!(file.write(&bytes[..]));
+                file.write(&bytes[..])?;
             }
 
             let padding = Block::Padding(self.length - new_length - 4);
-            try!(padding.write_to(true, &mut file));
+            padding.write_to(true, &mut file)?;
             self.push_block(padding);
         } else {
             // write by copying file data
@@ -457,26 +457,26 @@ impl<'a> Tag {
                 }
             };
 
-            let mut file = try!(OpenOptions::new()
+            let mut file = OpenOptions::new()
                 .write(true)
                 .truncate(true)
                 .create(true)
-                .open(&path));
+                .open(&path)?;
 
-            try!(file.write(b"fLaC"));
+            file.write(b"fLaC")?;
 
             for bytes in block_bytes.iter() {
-                try!(file.write(&bytes[..]));
+                file.write(&bytes[..])?;
             }
 
             let padding_size = 1024;
             debug!("Adding {} bytes of padding", padding_size);
             let padding = Block::Padding(padding_size);
-            new_length += try!(padding.write_to(true, &mut file));
+            new_length += padding.write_to(true, &mut file)?;
             self.push_block(padding);
 
             match data_opt {
-                Some(data) => try!(file.write_all(&data[..])),
+                Some(data) => file.write_all(&data[..])?,
                 None => {}
             }
         }
@@ -488,9 +488,9 @@ impl<'a> Tag {
 
     /// Attempts to read a FLAC tag from the file at the specified path.
     pub fn read_from_path<P: AsRef<Path>>(path: P) -> Result<Tag> {
-        let file = try!(File::open(&path));
+        let file = File::open(&path)?;
         let mut reader = BufReader::new(file);
-        let mut tag = try!(Tag::read_from(&mut reader));
+        let mut tag = Tag::read_from(&mut reader)?;
         tag.path = Some(path.as_ref().to_path_buf());
         Ok(tag)
     }

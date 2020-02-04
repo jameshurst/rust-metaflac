@@ -93,11 +93,11 @@ impl Block {
     /// Attempts to read a block from the reader. Returns a tuple containing a boolean indicating
     /// if the block was the last block, the length of the block in bytes, and the new `Block`.
     pub fn read_from(reader: &mut dyn Read) -> Result<(bool, u32, Block)> {
-        let byte = try!(reader.read_u8());
+        let byte = reader.read_u8()?;
         let is_last = (byte & 0x80) != 0;
         let blocktype_byte = byte & 0x7F;
         let blocktype = BlockType::from_u8(blocktype_byte).unwrap();
-        let length = try!(reader.read_uint::<BE>(3)) as u32;
+        let length = reader.read_uint::<BE>(3)? as u32;
 
         debug!("Reading block {:?} with {} bytes", blocktype, length);
 
@@ -109,11 +109,9 @@ impl Block {
             BlockType::Padding => Block::Padding(length),
             BlockType::Application => Block::Application(Application::from_bytes(&data[..])),
             BlockType::SeekTable => Block::SeekTable(SeekTable::from_bytes(&data[..])),
-            BlockType::VorbisComment => {
-                Block::VorbisComment(try!(VorbisComment::from_bytes(&data[..])))
-            }
-            BlockType::Picture => Block::Picture(try!(Picture::from_bytes(&data[..]))),
-            BlockType::CueSheet => Block::CueSheet(try!(CueSheet::from_bytes(&data[..]))),
+            BlockType::VorbisComment => Block::VorbisComment(VorbisComment::from_bytes(&data[..])?),
+            BlockType::Picture => Block::Picture(Picture::from_bytes(&data[..])?),
+            BlockType::CueSheet => Block::CueSheet(CueSheet::from_bytes(&data[..])?),
             BlockType::Unknown(_) => Block::Unknown((blocktype_byte, data)),
         };
 
@@ -164,20 +162,20 @@ impl Block {
             byte |= 0x80;
         }
         byte |= self.block_type().to_u8().unwrap() & 0x7F;
-        try!(writer.write_u8(byte));
-        try!(writer.write_all(&content_len.to_be_bytes()[1..]));
+        writer.write_u8(byte)?;
+        writer.write_all(&content_len.to_be_bytes()[1..])?;
 
         match contents {
-            Some(bytes) => try!(writer.write_all(&bytes[..])),
+            Some(bytes) => writer.write_all(&bytes[..])?,
             None => {
                 let zeroes = [0; 1024];
                 let mut remaining = content_len as usize;
                 loop {
                     if remaining <= zeroes.len() {
-                        try!(writer.write_all(&zeroes[..remaining]));
+                        writer.write_all(&zeroes[..remaining])?;
                         break;
                     } else {
-                        try!(writer.write_all(&zeroes[..]));
+                        writer.write_all(&zeroes[..])?;
                         remaining -= zeroes.len();
                     }
                 }
@@ -282,7 +280,8 @@ impl StreamInfo {
         let bps_total = (&bytes[i..i + 5]).read_uint::<BE>(5).unwrap();
         i += 5;
 
-        streaminfo.bits_per_sample = ((sample_channel_bps & 0x1) << 4 | (bps_total >> 36) as u8) + 1;
+        streaminfo.bits_per_sample =
+            ((sample_channel_bps & 0x1) << 4 | (bps_total >> 36) as u8) + 1;
         streaminfo.total_samples = bps_total & 0xF_FF_FF_FF_FF;
 
         streaminfo.md5 = bytes[i..i + 16].to_vec();
@@ -314,7 +313,11 @@ impl StreamInfo {
         bytes.push(byte);
 
         // last 32 bits of sample count
-        bytes.extend(((self.total_samples & 0xFF_FF_FF_FF) as u32).to_be_bytes().into_iter());
+        bytes.extend(
+            ((self.total_samples & 0xFF_FF_FF_FF) as u32)
+                .to_be_bytes()
+                .into_iter(),
+        );
 
         bytes.extend(self.md5.iter().cloned());
 
@@ -461,7 +464,7 @@ impl CueSheet {
         let mut cuesheet = CueSheet::new();
         let mut i = 0;
 
-        cuesheet.catalog_num = try!(String::from_utf8(bytes[i..i + 128].to_vec()));
+        cuesheet.catalog_num = String::from_utf8(bytes[i..i + 128].to_vec())?;
         i += 128;
 
         cuesheet.num_leadin = u64::from_be_bytes((&bytes[i..i + 8]).try_into().unwrap());
@@ -486,7 +489,7 @@ impl CueSheet {
             track.number = bytes[i];
             i += 1;
 
-            track.isrc = try!(String::from_utf8(bytes[i..i + 12].to_vec()));
+            track.isrc = String::from_utf8(bytes[i..i + 12].to_vec())?;
             i += 12;
 
             let flags = bytes[i];
@@ -707,14 +710,14 @@ impl Picture {
         let mime_length = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
-        picture.mime_type = try!(String::from_utf8(bytes[i..i + mime_length].to_vec()));
+        picture.mime_type = String::from_utf8(bytes[i..i + mime_length].to_vec())?;
         i += mime_length;
 
         let description_length =
             u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
-        picture.description = try!(String::from_utf8(bytes[i..i + description_length].to_vec()));
+        picture.description = String::from_utf8(bytes[i..i + description_length].to_vec())?;
         i += description_length;
 
         picture.width = u32::from_be_bytes((&bytes[i..i + 4]).try_into().unwrap());
@@ -890,7 +893,7 @@ impl VorbisComment {
         let vendor_length = u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
         i += 4;
 
-        vorbis.vendor_string = try!(String::from_utf8(bytes[i..i + vendor_length].to_vec()));
+        vorbis.vendor_string = String::from_utf8(bytes[i..i + vendor_length].to_vec())?;
         i += vendor_length;
 
         let num_comments = u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap());
@@ -901,7 +904,7 @@ impl VorbisComment {
                 u32::from_le_bytes((&bytes[i..i + 4]).try_into().unwrap()) as usize;
             i += 4;
 
-            let comments = try!(String::from_utf8(bytes[i..i + comment_length].to_vec()));
+            let comments = String::from_utf8(bytes[i..i + comment_length].to_vec())?;
             i += comment_length;
 
             let comments_split: Vec<&str> = comments.splitn(2, '=').collect();
