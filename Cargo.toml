@@ -14,4 +14,3 @@ keywords = ["flac", "audio", "parser", "metadata"]
 log = "0.4.8"
 hex = "0.4.0"
 byteorder = "1.3.2"
-num = "0.2.0"
