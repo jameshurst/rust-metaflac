@@ -303,7 +303,17 @@ impl<'a> Tag {
         });
     }
 
-    
+    /// Returns STREAMINFO block if exists
+    pub fn get_streaminfo(&self) -> Option<&StreamInfo> {
+        for i in 0..self.blocks.len() {
+            if let Block::StreamInfo(s) = &self.blocks[i] {
+                return Some(s);
+            }
+        }
+
+        None
+    }
+
     /// Pushes new or updates existing STREAMINFO block
     pub fn set_streaminfo(&mut self, block: StreamInfo) {
         self.remove_blocks(BlockType::StreamInfo);
