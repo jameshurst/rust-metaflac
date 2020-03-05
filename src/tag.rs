@@ -2,7 +2,7 @@ extern crate byteorder;
 
 use self::byteorder::{BigEndian, ReadBytesExt};
 
-use block::{Block, BlockType, Picture, PictureType, VorbisComment};
+use block::{Block, BlockType, Picture, PictureType, VorbisComment, StreamInfo};
 use error::{Error, ErrorKind, Result};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
@@ -31,6 +31,11 @@ impl<'a> Tag {
 
     /// Adds a block to the tag.
     pub fn push_block(&mut self, block: Block) {
+        if let Block::StreamInfo(s) = block {
+            self.set_streaminfo(s);
+            return;
+        }
+
         self.blocks.push(block);
     }
 
@@ -296,6 +301,23 @@ impl<'a> Tag {
             Block::Picture(ref picture) => picture.picture_type != picture_type,
             _ => true,
         });
+    }
+
+    /// Returns STREAMINFO block if exists
+    pub fn get_streaminfo(&self) -> Option<&StreamInfo> {
+        for i in 0..self.blocks.len() {
+            if let Block::StreamInfo(s) = &self.blocks[i] {
+                return Some(s);
+            }
+        }
+
+        None
+    }
+
+    /// Pushes new or updates existing STREAMINFO block
+    pub fn set_streaminfo(&mut self, block: StreamInfo) {
+        self.remove_blocks(BlockType::StreamInfo);
+        self.blocks.insert(0, Block::StreamInfo(block));
     }
 
     /// Attempts to save the tag back to the file which it was read from. An `Error::InvalidInput`
