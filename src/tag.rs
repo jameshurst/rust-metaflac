@@ -77,9 +77,7 @@ impl<'a> Tag {
     ///
     /// let mut tag = Tag::new();
     /// assert!(tag.vorbis_comments().is_none());
-    ///
     /// tag.set_vorbis("key", vec!("value"));
-    ///
     /// assert!(tag.vorbis_comments().is_some());
     /// ```
     pub fn vorbis_comments(&self) -> Option<&VorbisComment> {
@@ -229,9 +227,7 @@ impl<'a> Tag {
     ///
     /// let mut tag = Tag::new();
     /// assert_eq!(tag.pictures().count(), 0);
-    ///
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
-    ///
     /// assert_eq!(tag.pictures().count(), 1);
     /// ```
     pub fn pictures(&'a self) -> impl Iterator<Item = &'a Picture> + 'a {
@@ -303,18 +299,41 @@ impl<'a> Tag {
         });
     }
 
-    /// Returns STREAMINFO block if exists
+    /// Returns a reference to the first streaminfo block.
+    /// Returns `None` if no streaminfo blocks are found.
+    ///
+    /// # Example
+    /// ```
+    /// use metaflac::Tag;
+    /// use metaflac::block::StreamInfo;
+    ///
+    /// let mut tag = Tag::new();
+    /// assert!(tag.get_streaminfo().is_none());
+    /// tag.set_streaminfo(StreamInfo::new());
+    /// assert!(tag.get_streaminfo().is_some());
+    /// ```
     pub fn get_streaminfo(&self) -> Option<&StreamInfo> {
-        for i in 0..self.blocks.len() {
-            if let Block::StreamInfo(s) = &self.blocks[i] {
-                return Some(s);
+        for block in self.blocks() {
+            match *block {
+                Block::StreamInfo(ref info) => return Some(info),
+                _ => {}
             }
         }
 
         None
     }
 
-    /// Pushes new or updates existing STREAMINFO block
+    /// Sets the streaminfo block. If there is already a streaminfo block then it will be replaced.
+    ///
+    /// # Example
+    /// ```
+    /// use metaflac::Tag;
+    /// use metaflac::block::StreamInfo;
+    ///
+    /// let mut tag = Tag::new();
+    /// tag.set_streaminfo(StreamInfo::new());
+    /// assert!(tag.get_streaminfo().is_some());
+    /// ```
     pub fn set_streaminfo(&mut self, block: StreamInfo) {
         self.remove_blocks(BlockType::StreamInfo);
         self.blocks.insert(0, Block::StreamInfo(block));
