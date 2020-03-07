@@ -16,7 +16,7 @@ after_success:
         [ $TRAVIS_PULL_REQUEST = false ] &&
         echo '<meta http-equiv=refresh content=0;url=metaflac/index.html>' > target/doc/index.html &&
         git clone https://github.com/davisp/ghp-import &&
-        ./ghp-import/ghp-import -n target/doc &&
+        ./ghp-import/ghp-import.py -n target/doc &&
         git push -fq https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
 
 env:
