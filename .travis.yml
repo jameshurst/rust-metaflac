@@ -1,24 +1,20 @@
 language: rust
 rust:
-    - stable
-    - beta
-    - nightly
-
+  - stable
+  - beta
+  - nightly
 sudo: false
-
 script:
-    - cargo build --verbose && cargo test --verbose && cargo doc --verbose
-
+  - cargo build --verbose && cargo test --verbose && cargo doc --verbose
 after_success:
-    - |
-        [ $TRAVIS_RUST_VERSION = nightly ] &&
-        [ $TRAVIS_BRANCH = master ] &&
-        [ $TRAVIS_PULL_REQUEST = false ] &&
-        echo '<meta http-equiv=refresh content=0;url=metaflac/index.html>' > target/doc/index.html &&
-        git clone https://github.com/davisp/ghp-import &&
-        ./ghp-import/ghp_import.py -n target/doc &&
-        git push -fq https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
-
+  - |
+    [ $TRAVIS_RUST_VERSION = nightly ] &&
+    [ $TRAVIS_BRANCH = master ] &&
+    [ $TRAVIS_PULL_REQUEST = false ] &&
+    echo '<meta http-equiv=refresh content=0;url=metaflac/index.html>' > target/doc/index.html &&
+    git clone https://github.com/davisp/ghp-import &&
+    ./ghp-import/ghp_import.py -n target/doc &&
+    git push -fq https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
 env:
-    global:
-        secure: I3RgYvud8PHuEzGRbL6T/QquPPiMwsmoUwPzHmrn3ODtQPBUSuRkqMjf24FlW5UGPXJLc9plW28ot4LI3eVVpoFdl8jLU9XQUIaVK6U39RWgzHCACNfdTXBTdtt/7jgVWPYwChyJTNOMOUcYFSZb3DWScIEMQbWzLlwW7EBsVkk=
+  global:
+    - secure: IBqnhu7mn6zx0Z5sofYfV7+SIiSyMytMjVaNpS6ZfLecOJZkKYtn2lVNW2EcQqr4LqzYAje82S4Cul9uLU3vkmxahiDlOQbFRzF4e1Qv/tFTo5Iz5yVNsjAp/Lmc/K7RyxmVjM+2xhZw9Fun9naR33UPzy/Z9uTfxC+zppL6MZA=
