@@ -7,6 +7,7 @@ use error::{Error, ErrorKind, Result};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::io;
 
 /// A structure representing a flac metadata tag.
 #[derive(Clone)]
@@ -218,7 +219,7 @@ impl<'a> Tag {
             .remove_pair(&key.to_ascii_uppercase(), value);
     }
 
-    /// Returns a vector of references to the pictures in the tag.
+    /// Returns an iterator of references to the pictures in the tag.
     ///
     /// # Example
     /// ```
@@ -419,6 +420,32 @@ impl<'a> Tag {
 
         let mut ident = [0; 4];
         reader.read(&mut ident)?;
+
+        // skip id3 v2.0, v2.3 and v2.4
+        if &ident[0..3] == b"ID3" && vec![0x02, 0x03, 0x04].contains(&ident[3]) {
+            let mut header_tail = [0; 6];
+            reader.read(&mut header_tail)?;
+            // Header layout from the id3v2 tag spec:
+            // 3 Bytes: "ID3"
+            // 2 Bytes: Maj/Min version
+            // 1 Byte: Flags, bit 0x10 indicates a 10-Byte footer
+            // 4 Bytes: size of the Tag, excluding header and footer, taking 7 bits per byte.
+            let has_footer = header_tail[1] & 0x10 > 0;
+            let size = (header_tail[2] as u32 & 0b_0111_1111) << 21
+                | (header_tail[3] as u32 & 0b_0111_1111) << 14
+                | (header_tail[4] as u32 & 0b_0111_1111) << 7
+                | (header_tail[5] as u32 & 0b_0111_1111);
+            // Discard `size` bytes without allocating. See https://stackoverflow.com/questions/42243355/how-to-advance-through-data-from-the-stdioread-trait-when-seek-isnt-impleme
+            if has_footer {
+                io::copy(&mut reader.take(size as u64 + 10), &mut io::sink());
+            } else {
+                io::copy(&mut reader.take(size as u64), &mut io::sink());
+            }
+
+            //try to read fLaC again.
+            reader.read(&mut ident)?;
+        }
+
         if &ident[..] != b"fLaC" {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
