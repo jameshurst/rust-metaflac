@@ -1121,3 +1121,92 @@ impl VorbisComment {
     // }}}
 }
 //}}}
+
+/// Iterator over FLAC stream's blocks
+pub struct Blocks<R> {
+    ident_read: bool,
+    finished: bool,
+    reader: R,
+}
+
+impl<R> Blocks<R> where R: Read {
+    /// Create new iterator over FLAC stream's blocks
+    pub fn new(reader: R) -> Self {
+        Blocks {
+            ident_read: false,
+            finished: false,
+            reader,
+        }
+    }
+}
+
+impl<R> Iterator for Blocks<R> where R: Read {
+    /// block length and block pairs
+    type Item = Result<(u32, Block)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.ident_read {
+            self.ident_read = true;
+            if let Err(err) = read_ident(&mut self.reader) {
+                self.finished = true;
+                return Some(Err(err));
+            }
+        }
+
+        if !self.finished {
+            match Block::read_from(&mut self.reader) {
+                Ok((is_last, length, block)) => {
+                    self.finished = is_last;
+                    Some(Ok((length, block)))
+                }
+                Err(err) => {
+                    self.finished = true;
+                    Some(Err(err))
+                }
+            }
+        } else {
+            None
+        }
+    }
+}
+
+fn read_ident<R: Read>(mut reader: R) -> Result<()> {
+    use std::io;
+
+    let mut ident = [0; 4];
+    reader.read_exact(&mut ident)?;
+
+    // skip id3 v2.2, v2.3 and v2.4
+    if &ident[0..3] == b"ID3" && vec![0x02, 0x03, 0x04].contains(&ident[3]) {
+        let mut header_tail = [0; 6];
+        reader.read_exact(&mut header_tail)?;
+        // Header layout from the id3v2 tag spec:
+        // 3 Bytes: "ID3"
+        // 2 Bytes: Maj/Min version
+        // 1 Byte: Flags, bit 0x10 indicates a 10-Byte footer
+        // 4 Bytes: size of the Tag, excluding header and footer, taking 7 bits per byte.
+        let has_footer = header_tail[1] & 0x10 > 0;
+        let size = (header_tail[2] as u32 & 0b_0111_1111) << 21
+            | (header_tail[3] as u32 & 0b_0111_1111) << 14
+            | (header_tail[4] as u32 & 0b_0111_1111) << 7
+            | (header_tail[5] as u32 & 0b_0111_1111);
+        // Discard `size` bytes without allocating. See https://stackoverflow.com/questions/42243355/how-to-advance-through-data-from-the-stdioread-trait-when-seek-isnt-impleme
+        if has_footer {
+            io::copy(&mut (&mut reader).take(size as u64 + 10), &mut io::sink())?;
+        } else {
+            io::copy(&mut (&mut reader).take(size as u64), &mut io::sink())?;
+        }
+
+        //try to read fLaC again.
+        reader.read_exact(&mut ident)?;
+    }
+
+    if &ident[..] == b"fLaC" {
+        Ok(())
+    } else {
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            "reader does not contain flac metadata",
+        ))
+    }
+}

@@ -2,12 +2,11 @@ extern crate byteorder;
 
 use self::byteorder::{BigEndian, ReadBytesExt};
 
-use block::{Block, BlockType, Picture, PictureType, VorbisComment, StreamInfo};
-use error::{Error, ErrorKind, Result};
+use block::{Block, Blocks, BlockType, Picture, PictureType, VorbisComment, StreamInfo};
+use error::Result;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::io;
 
 /// A structure representing a flac metadata tag.
 #[derive(Clone)]
@@ -375,7 +374,7 @@ impl<'a> Tag {
         }
 
         let mut ident = [0; 4];
-        try_io!(reader, reader.read(&mut ident));
+        try_io!(reader, reader.read_exact(&mut ident));
         if &ident[..] == b"fLaC" {
             let mut more = true;
             while more {
@@ -409,7 +408,7 @@ impl<'a> Tag {
         }
 
         let mut ident = [0; 4];
-        try_or_false!(reader.read(&mut ident));
+        try_or_false!(reader.read_exact(&mut ident));
         let _ = reader.seek(SeekFrom::Current(-4));
         &ident[..] == b"fLaC"
     }
@@ -418,48 +417,10 @@ impl<'a> Tag {
     pub fn read_from(reader: &mut dyn Read) -> Result<Tag> {
         let mut tag = Tag::new();
 
-        let mut ident = [0; 4];
-        reader.read(&mut ident)?;
-
-        // skip id3 v2.0, v2.3 and v2.4
-        if &ident[0..3] == b"ID3" && vec![0x02, 0x03, 0x04].contains(&ident[3]) {
-            let mut header_tail = [0; 6];
-            reader.read(&mut header_tail)?;
-            // Header layout from the id3v2 tag spec:
-            // 3 Bytes: "ID3"
-            // 2 Bytes: Maj/Min version
-            // 1 Byte: Flags, bit 0x10 indicates a 10-Byte footer
-            // 4 Bytes: size of the Tag, excluding header and footer, taking 7 bits per byte.
-            let has_footer = header_tail[1] & 0x10 > 0;
-            let size = (header_tail[2] as u32 & 0b_0111_1111) << 21
-                | (header_tail[3] as u32 & 0b_0111_1111) << 14
-                | (header_tail[4] as u32 & 0b_0111_1111) << 7
-                | (header_tail[5] as u32 & 0b_0111_1111);
-            // Discard `size` bytes without allocating. See https://stackoverflow.com/questions/42243355/how-to-advance-through-data-from-the-stdioread-trait-when-seek-isnt-impleme
-            if has_footer {
-                io::copy(&mut reader.take(size as u64 + 10), &mut io::sink());
-            } else {
-                io::copy(&mut reader.take(size as u64), &mut io::sink());
-            }
-
-            //try to read fLaC again.
-            reader.read(&mut ident)?;
-        }
-
-        if &ident[..] != b"fLaC" {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "reader does not contain flac metadata",
-            ));
-        }
-
-        loop {
-            let (is_last, length, block) = Block::read_from(reader)?;
+        for result in Blocks::new(reader) {
+            let (length, block) = result?;
             tag.length += length;
             tag.blocks.push(block);
-            if is_last {
-                break;
-            }
         }
 
         Ok(tag)
@@ -467,7 +428,7 @@ impl<'a> Tag {
 
     /// Attempts to write the FLAC tag to the writer.
     pub fn write_to(&mut self, writer: &mut dyn Write) -> Result<()> {
-        writer.write(b"fLaC")?;
+        writer.write_all(b"fLaC")?;
 
         let nblocks = self.blocks.len();
         self.length = 0;
@@ -507,7 +468,7 @@ impl<'a> Tag {
             file.seek(SeekFrom::Start(4))?;
 
             for bytes in block_bytes.iter() {
-                file.write(&bytes[..])?;
+                file.write_all(&bytes[..])?;
             }
 
             let padding = Block::Padding(self.length - new_length - 4);
@@ -530,10 +491,10 @@ impl<'a> Tag {
                 .create(true)
                 .open(&path)?;
 
-            file.write(b"fLaC")?;
+            file.write_all(b"fLaC")?;
 
             for bytes in block_bytes.iter() {
-                file.write(&bytes[..])?;
+                file.write_all(&bytes[..])?;
             }
 
             let padding_size = 1024;
