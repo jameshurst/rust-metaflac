@@ -65,6 +65,8 @@ impl fmt::Debug for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
             write!(out, "{:?}: {}", self.kind, self.description)
+        } else if let Some(source) = error::Error::source(self) {
+            write!(out, "{}", source)
         } else {
             write!(out, "{:?}", self.kind)
         }
@@ -75,6 +77,8 @@ impl fmt::Display for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
             write!(out, "{:?}: {}", self.kind, self.description)
+        } else if let Some(source) = error::Error::source(self) {
+            write!(out, "{}", source)
         } else {
             write!(out, "{:?}", self.kind)
         }
