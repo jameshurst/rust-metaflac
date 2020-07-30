@@ -1,9 +1,6 @@
-extern crate byteorder;
-extern crate hex;
+use crate::error::{Error, ErrorKind, Result};
 
-use error::{Error, ErrorKind, Result};
-
-use self::byteorder::{ReadBytesExt, WriteBytesExt, BE};
+use byteorder::{ReadBytesExt, WriteBytesExt, BE};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -312,6 +309,12 @@ impl StreamInfo {
         bytes
     }
 }
+
+impl Default for StreamInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 // Application {{{
@@ -368,6 +371,11 @@ impl Application {
     }
 }
 
+impl Default for Application {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 // CueSheet {{{
@@ -387,6 +395,12 @@ impl CueSheetTrackIndex {
             offset: 0,
             point_num: 0,
         }
+    }
+}
+
+impl Default for CueSheetTrackIndex {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -420,6 +434,12 @@ impl CueSheetTrack {
             pre_emphasis: false,
             indices: Vec::new(),
         }
+    }
+}
+
+impl Default for CueSheetTrack {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -574,6 +594,11 @@ impl CueSheet {
     }
 }
 
+impl Default for CueSheet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 // Picture {{{
@@ -750,6 +775,12 @@ impl Picture {
         bytes
     }
 }
+
+impl Default for Picture {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 // SeekTable {{{
@@ -804,6 +835,12 @@ impl SeekPoint {
         bytes
     }
 }
+
+impl Default for SeekPoint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 /// A structure representing a SEEKTABLE block.
@@ -845,6 +882,12 @@ impl SeekTable {
         }
 
         bytes
+    }
+}
+
+impl Default for SeekTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 //}}}
@@ -895,11 +938,11 @@ impl VorbisComment {
             let key = comments_split[0].to_ascii_uppercase();
             let value = comments_split[1].to_owned();
 
-            if vorbis.comments.contains_key(&key) {
-                vorbis.comments.get_mut(&key).unwrap().push(value);
-            } else {
-                vorbis.comments.insert(key, vec![value]);
-            }
+            vorbis
+                .comments
+                .entry(key)
+                .or_insert_with(|| Vec::with_capacity(1))
+                .push(value);
         }
 
         Ok(vorbis)
@@ -956,9 +999,8 @@ impl VorbisComment {
 
     /// Removes any matching key/value pairs.
     pub fn remove_pair(&mut self, key: &str, value: &str) {
-        match self.comments.get_mut(key) {
-            Some(list) => list.retain(|s| &s[..] != value),
-            None => {}
+        if let Some(list) = self.comments.get_mut(key) {
+            list.retain(|s| &s[..] != value);
         }
 
         let mut num_values = 0;
@@ -1046,7 +1088,7 @@ impl VorbisComment {
     /// Attempts to convert the first TRACKNUMBER comment to a `u32`.
     pub fn track(&self) -> Option<u32> {
         self.get("TRACKNUMBER").and_then(|s| {
-            if s.len() > 0 {
+            if !s.is_empty() {
                 s[0].parse::<u32>().ok()
             } else {
                 None
@@ -1067,7 +1109,7 @@ impl VorbisComment {
     /// Attempts to convert the first TOTALTRACKS comment to a `u32`.
     pub fn total_tracks(&self) -> Option<u32> {
         self.get("TOTALTRACKS").and_then(|s| {
-            if s.len() > 0 {
+            if !s.is_empty() {
                 s[0].parse::<u32>().ok()
             } else {
                 None
@@ -1120,6 +1162,12 @@ impl VorbisComment {
     }
     // }}}
 }
+
+impl Default for VorbisComment {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 //}}}
 
 /// Iterator over FLAC stream's blocks
@@ -1129,7 +1177,10 @@ pub struct Blocks<R> {
     reader: R,
 }
 
-impl<R> Blocks<R> where R: Read {
+impl<R> Blocks<R>
+where
+    R: Read,
+{
     /// Create new iterator over FLAC stream's blocks
     pub fn new(reader: R) -> Self {
         Blocks {
@@ -1140,7 +1191,10 @@ impl<R> Blocks<R> where R: Read {
     }
 }
 
-impl<R> Iterator for Blocks<R> where R: Read {
+impl<R> Iterator for Blocks<R>
+where
+    R: Read,
+{
     /// block length and block pairs
     type Item = Result<(u32, Block)>;
 

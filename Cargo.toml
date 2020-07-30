@@ -9,8 +9,13 @@ repository = "https://github.com/jameshurst/rust-metaflac"
 documentation = "https://jameshurst.github.io/rust-metaflac"
 description = "A library for reading and writing FLAC metadata."
 keywords = ["flac", "audio", "parser", "metadata"]
+edition = "2018"
+
+[lib]
+name = "metaflac"
+crate-type = ["rlib"]
 
 [dependencies]
-log = "0.4.8"
-hex = "0.4.0"
-byteorder = "1.3.2"
+log = "0.4.11"
+hex = "0.4.2"
+byteorder = "^1.3.4"

@@ -1,9 +1,8 @@
-extern crate byteorder;
+use crate::block::{Block, BlockType, Blocks, Picture, PictureType, StreamInfo, VorbisComment};
+use crate::error::{Error, ErrorKind, Result};
 
-use self::byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt};
 
-use block::{Block, Blocks, BlockType, Picture, PictureType, VorbisComment, StreamInfo};
-use error::Result;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -82,9 +81,8 @@ impl<'a> Tag {
     /// ```
     pub fn vorbis_comments(&self) -> Option<&VorbisComment> {
         for block in self.blocks() {
-            match *block {
-                Block::VorbisComment(ref comm) => return Some(comm),
-                _ => {}
+            if let Block::VorbisComment(ref comm) = *block {
+                return Some(comm);
             }
         }
 
@@ -115,9 +113,8 @@ impl<'a> Tag {
     pub fn vorbis_comments_mut(&mut self) -> &mut VorbisComment {
         for i in 0..self.blocks.len() {
             unsafe {
-                match *self.blocks.as_mut_ptr().offset(i as isize) {
-                    Block::VorbisComment(ref mut comm) => return comm,
-                    _ => {}
+                if let Block::VorbisComment(ref mut comm) = *self.blocks.as_mut_ptr().add(i) {
+                    return comm;
                 }
             }
         }
@@ -140,9 +137,9 @@ impl<'a> Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
+    /// tag.set_vorbis(&key, vec!(&value1, &value2));
     ///
-    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1, &value2]);
     /// ```
     pub fn get_vorbis(&'a self, key: &str) -> Option<impl Iterator<Item = &'a str> + 'a> {
         self.vorbis_comments()
@@ -162,9 +159,9 @@ impl<'a> Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
+    /// tag.set_vorbis(&key, vec!(&value1, &value2));
     ///
-    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1, &value2]);
     /// ```
     pub fn set_vorbis<K: Into<String>, V: Into<String>>(&mut self, key: K, values: Vec<V>) {
         self.vorbis_comments_mut()
@@ -183,8 +180,8 @@ impl<'a> Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.set_vorbis(&key[..], vec!(&value1[..], &value2[..]));
-    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
+    /// tag.set_vorbis(&key, vec!(&value1, &value2));
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1, &value2]);
     ///
     /// tag.remove_vorbis(&key);
     /// assert!(tag.get_vorbis(&key).is_none());
@@ -207,11 +204,11 @@ impl<'a> Tag {
     /// let value1 = "value1".to_owned();
     /// let value2 = "value2".to_owned();
     ///
-    /// tag.set_vorbis(key.clone(), vec!(&value1[..], &value2[..]));
-    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1[..], &value2[..]]);
+    /// tag.set_vorbis(key.clone(), vec!(&value1, &value2));
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value1, &value2]);
     ///
     /// tag.remove_vorbis_pair(&key, &value1);
-    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value2[..]]);
+    /// assert_eq!(tag.get_vorbis(&key).unwrap().collect::<Vec<_>>(), &[&value2]);
     /// ```
     pub fn remove_vorbis_pair(&mut self, key: &str, value: &str) {
         self.vorbis_comments_mut()
@@ -231,10 +228,10 @@ impl<'a> Tag {
     /// assert_eq!(tag.pictures().count(), 1);
     /// ```
     pub fn pictures(&'a self) -> impl Iterator<Item = &'a Picture> + 'a {
-        return self.blocks.iter().filter_map(|block| match *block {
+        self.blocks.iter().filter_map(|block| match *block {
             Block::Picture(ref picture) => Some(picture),
             _ => None,
-        });
+        })
     }
 
     /// Adds a picture block.
@@ -250,9 +247,9 @@ impl<'a> Tag {
     /// tag.add_picture("image/jpeg", CoverFront, vec!(0xFF));
     ///
     /// let picture = tag.pictures().next().unwrap();
-    /// assert_eq!(&picture.mime_type[..], "image/jpeg");
+    /// assert_eq!(&picture.mime_type, "image/jpeg");
     /// assert_eq!(picture.picture_type, CoverFront);
-    /// assert_eq!(&picture.data[..], &vec!(0xFF)[..]);
+    /// assert_eq!(&picture.data, &vec!(0xFF));
     /// ```
     pub fn add_picture<T: Into<String>>(
         &mut self,
@@ -288,9 +285,9 @@ impl<'a> Tag {
     /// assert_eq!(tag.pictures().count(), 1);
     ///
     /// let picture = tag.pictures().next().unwrap();
-    /// assert_eq!(&picture.mime_type[..], "image/png");
+    /// assert_eq!(&picture.mime_type, "image/png");
     /// assert_eq!(picture.picture_type, Other);
-    /// assert_eq!(&picture.data[..], &vec!(0xAB)[..]);
+    /// assert_eq!(&picture.data, &vec!(0xAB));
     /// ```
     pub fn remove_picture_type(&mut self, picture_type: PictureType) {
         self.blocks.retain(|block: &Block| match *block {
@@ -314,9 +311,8 @@ impl<'a> Tag {
     /// ```
     pub fn get_streaminfo(&self) -> Option<&StreamInfo> {
         for block in self.blocks() {
-            match *block {
-                Block::StreamInfo(ref info) => return Some(info),
-                _ => {}
+            if let Block::StreamInfo(ref info) = *block {
+                return Some(info);
             }
         }
 
@@ -341,10 +337,10 @@ impl<'a> Tag {
 
     /// Attempts to save the tag back to the file which it was read from. An `Error::InvalidInput`
     /// will be returned if this is called on a tag which was not read from a file.
-    pub fn save(&mut self) -> ::Result<()> {
+    pub fn save(&mut self) -> Result<()> {
         if self.path.is_none() {
-            return Err(::Error::new(
-                ::ErrorKind::InvalidInput,
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
                 "attempted to save file which was not read from a path",
             ));
         }
@@ -503,9 +499,8 @@ impl<'a> Tag {
             new_length += padding.write_to(true, &mut file)?;
             self.push_block(padding);
 
-            match data_opt {
-                Some(data) => file.write_all(&data[..])?,
-                None => {}
+            if let Some(data) = data_opt {
+                file.write_all(&data[..])?;
             }
         }
 
@@ -521,6 +516,12 @@ impl<'a> Tag {
         let mut tag = Tag::read_from(&mut reader)?;
         tag.path = Some(path.as_ref().to_path_buf());
         Ok(tag)
+    }
+}
+
+impl Default for Tag {
+    fn default() -> Self {
+        Tag::new()
     }
 }
 

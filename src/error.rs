@@ -1,5 +1,3 @@
-extern crate byteorder;
-
 use std::error;
 use std::fmt;
 use std::io;
@@ -31,27 +29,12 @@ pub struct Error {
 impl Error {
     /// Creates a new `Error` using the error kind and description.
     pub fn new(kind: ErrorKind, description: &'static str) -> Error {
-        Error {
-            kind: kind,
-            description: description,
-        }
+        Error { kind, description }
     }
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
-        if self.source().is_some() {
-            self.source().unwrap().description()
-        } else {
-            match self.kind {
-                ErrorKind::Io(ref err) => error::Error::description(err),
-                ErrorKind::StringDecoding(ref err) => err.description(),
-                _ => self.description,
-            }
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self.kind {
             ErrorKind::Io(ref err) => Some(err),
             ErrorKind::StringDecoding(ref err) => Some(err),
@@ -81,9 +64,9 @@ impl From<string::FromUtf8Error> for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
-            write!(out, "{:?}: {}", self.kind, error::Error::description(self))
+            write!(out, "{:?}: {}", self.kind, self.description)
         } else {
-            write!(out, "{}", error::Error::description(self))
+            write!(out, "{:?}", self.kind)
         }
     }
 }
@@ -91,9 +74,9 @@ impl fmt::Debug for Error {
 impl fmt::Display for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
-            write!(out, "{:?}: {}", self.kind, error::Error::description(self))
+            write!(out, "{:?}: {}", self.kind, self.description)
         } else {
-            write!(out, "{}", error::Error::description(self))
+            write!(out, "{:?}", self.kind)
         }
     }
 }
