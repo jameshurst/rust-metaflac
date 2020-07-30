@@ -41,6 +41,23 @@ impl error::Error for Error {
             _ => None,
         }
     }
+
+    #[allow(deprecated)]
+    fn description(&self) -> &str {
+        if self.source().is_some() {
+            self.source().unwrap().description()
+        } else {
+            match self.kind {
+                ErrorKind::Io(ref err) => error::Error::description(err),
+                ErrorKind::StringDecoding(ref err) => err.description(),
+                _ => self.description,
+            }
+        }
+    }
+
+    fn cause(&self) -> Option<&dyn error::Error> {
+        error::Error::source(self)
+    }
 }
 
 impl From<io::Error> for Error {
