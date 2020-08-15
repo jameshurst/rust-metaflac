@@ -1,5 +1,3 @@
-extern crate byteorder;
-
 use std::error;
 use std::fmt;
 use std::io;
@@ -31,14 +29,20 @@ pub struct Error {
 impl Error {
     /// Creates a new `Error` using the error kind and description.
     pub fn new(kind: ErrorKind, description: &'static str) -> Error {
-        Error {
-            kind: kind,
-            description: description,
-        }
+        Error { kind, description }
     }
 }
 
 impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self.kind {
+            ErrorKind::Io(ref err) => Some(err),
+            ErrorKind::StringDecoding(ref err) => Some(err),
+            _ => None,
+        }
+    }
+
+    #[allow(deprecated)]
     fn description(&self) -> &str {
         if self.source().is_some() {
             self.source().unwrap().description()
@@ -52,11 +56,7 @@ impl error::Error for Error {
     }
 
     fn cause(&self) -> Option<&dyn error::Error> {
-        match self.kind {
-            ErrorKind::Io(ref err) => Some(err),
-            ErrorKind::StringDecoding(ref err) => Some(err),
-            _ => None,
-        }
+        error::Error::source(self)
     }
 }
 
@@ -81,9 +81,11 @@ impl From<string::FromUtf8Error> for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
-            write!(out, "{:?}: {}", self.kind, error::Error::description(self))
+            write!(out, "{:?}: {}", self.kind, self.description)
+        } else if let Some(source) = error::Error::source(self) {
+            write!(out, "{}", source)
         } else {
-            write!(out, "{}", error::Error::description(self))
+            write!(out, "{:?}", self.kind)
         }
     }
 }
@@ -91,9 +93,11 @@ impl fmt::Debug for Error {
 impl fmt::Display for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
         if self.description != "" {
-            write!(out, "{:?}: {}", self.kind, error::Error::description(self))
+            write!(out, "{:?}: {}", self.kind, self.description)
+        } else if let Some(source) = error::Error::source(self) {
+            write!(out, "{}", source)
         } else {
-            write!(out, "{}", error::Error::description(self))
+            write!(out, "{:?}", self.kind)
         }
     }
 }

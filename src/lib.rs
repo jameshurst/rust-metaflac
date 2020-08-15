@@ -1,7 +1,5 @@
 //! A library to read and write FLAC metadata tags.
 
-#![crate_name = "metaflac"]
-#![crate_type = "rlib"]
 #![warn(missing_docs)]
 
 #[macro_use]
