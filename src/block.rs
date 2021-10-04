@@ -1224,7 +1224,9 @@ where
     }
 }
 
-fn read_ident<R: Read>(mut reader: R) -> Result<()> {
+/// Read from a reader until a flac file identifier is found. Returns an error if no flac identifier
+/// could be found.
+pub fn read_ident<R: Read>(mut reader: R) -> Result<()> {
     use std::io;
 
     let mut ident = [0; 4];

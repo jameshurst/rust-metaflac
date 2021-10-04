@@ -460,8 +460,9 @@ impl<'a> Tag {
             debug!("Writing using padding");
             let mut file = OpenOptions::new()
                 .write(true)
+                .read(true)
                 .open(self.path.as_ref().unwrap())?;
-            file.seek(SeekFrom::Start(4))?;
+            crate::block::read_ident(&mut file)?;
 
             for bytes in block_bytes.iter() {
                 file.write_all(&bytes[..])?;
