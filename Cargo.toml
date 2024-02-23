@@ -16,6 +16,5 @@ name = "metaflac"
 crate-type = ["rlib"]
 
 [dependencies]
-log = "0.4.11"
 hex = "0.4.2"
 byteorder = "^1.3.4"

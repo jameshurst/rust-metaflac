@@ -379,7 +379,6 @@ impl<'a> Tag {
                 more = ((header >> 24) & 0x80) == 0;
                 let length = header & 0xFF_FF_FF;
 
-                debug!("Skipping {} bytes", length);
                 try_io!(reader, reader.seek(SeekFrom::Current(length as i64)));
             }
         } else {
@@ -457,7 +456,6 @@ impl<'a> Tag {
             && path.as_ref() == self.path.as_ref().unwrap().as_path()
             && new_length + 4 <= self.length
         {
-            debug!("Writing using padding");
             let mut file = OpenOptions::new()
                 .write(true)
                 .read(true)
@@ -473,7 +471,6 @@ impl<'a> Tag {
             self.push_block(padding);
         } else {
             // write by copying file data
-            debug!("Writing to new file");
 
             let data_opt = {
                 match File::open(&path) {
@@ -495,7 +492,6 @@ impl<'a> Tag {
             }
 
             let padding_size = 1024;
-            debug!("Adding {} bytes of padding", padding_size);
             let padding = Block::Padding(padding_size);
             new_length += padding.write_to(true, &mut file)?;
             self.push_block(padding);
