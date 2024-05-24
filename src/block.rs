@@ -83,8 +83,6 @@ impl Block {
         let blocktype = BlockType::from_u8(blocktype_byte);
         let length = reader.read_uint::<BE>(3)? as u32;
 
-        debug!("Reading block {:?} with {} bytes", blocktype, length);
-
         let mut data = Vec::new();
         reader.take(length as u64).read_to_end(&mut data).unwrap();
 
@@ -98,8 +96,6 @@ impl Block {
             BlockType::CueSheet => Block::CueSheet(CueSheet::from_bytes(&data[..])?),
             BlockType::Unknown(_) => Block::Unknown((blocktype_byte, data)),
         };
-
-        debug!("{:?}", block);
 
         Ok((is_last, length + 4, block))
     }
@@ -134,12 +130,6 @@ impl Block {
             }
             Block::Unknown((_, ref bytes)) => (bytes.len() as u32, Some(bytes.clone())),
         };
-
-        debug!(
-            "Writing block {:?} with {} bytes",
-            self.block_type(),
-            content_len
-        );
 
         let mut byte: u8 = 0;
         if is_last {
@@ -710,7 +700,6 @@ impl Picture {
         picture.picture_type = match PictureType::from_u32(picture_type_u32) {
             Some(picture_type) => picture_type,
             None => {
-                debug!("Encountered invalid picture type: {}", picture_type_u32);
                 return Err(Error::new(ErrorKind::InvalidInput, "invalid picture type"));
             }
         };
@@ -969,7 +958,6 @@ impl VorbisComment {
         for (key, list) in self.comments.iter() {
             for value in list.iter() {
                 let comment_string = format!("{}={}", key, value);
-                debug!("Writing comment: {}", comment_string);
                 let comment = comment_string.into_bytes();
                 bytes.extend((comment.len() as u32).to_le_bytes().iter());
                 bytes.extend(comment.into_iter());

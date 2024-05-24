@@ -2,9 +2,6 @@
 
 #![warn(missing_docs)]
 
-#[macro_use]
-extern crate log;
-
 pub use block::{Block, BlockType};
 pub use error::{Error, ErrorKind, Result};
 pub use tag::Tag;
