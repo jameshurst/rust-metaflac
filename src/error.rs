@@ -80,7 +80,7 @@ impl From<string::FromUtf8Error> for Error {
 
 impl fmt::Debug for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
-        if self.description != "" {
+        if !self.description.is_empty() {
             write!(out, "{:?}: {}", self.kind, self.description)
         } else if let Some(source) = error::Error::source(self) {
             write!(out, "{}", source)
@@ -92,7 +92,7 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, out: &mut fmt::Formatter) -> fmt::Result {
-        if self.description != "" {
+        if !self.description.is_empty() {
             write!(out, "{:?}: {}", self.kind, self.description)
         } else if let Some(source) = error::Error::source(self) {
             write!(out, "{}", source)

@@ -24,8 +24,8 @@ pub enum BlockType {
 
 #[allow(missing_docs)]
 impl BlockType {
-    fn to_u8(&self) -> u8 {
-        match *self {
+    fn to_u8(self) -> u8 {
+        match self {
             BlockType::StreamInfo => 0,
             BlockType::Padding => 1,
             BlockType::Application => 2,
@@ -33,7 +33,7 @@ impl BlockType {
             BlockType::VorbisComment => 4,
             BlockType::CueSheet => 5,
             BlockType::Picture => 6,
-            BlockType::Unknown(n) => n as u8,
+            BlockType::Unknown(n) => n,
         }
     }
 
@@ -226,12 +226,10 @@ impl StreamInfo {
         let mut streaminfo = StreamInfo::new();
         let mut i = 0;
 
-        streaminfo.min_block_size =
-            u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
+        streaminfo.min_block_size = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap());
         i += 2;
 
-        streaminfo.max_block_size =
-            u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
+        streaminfo.max_block_size = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap());
         i += 2;
 
         streaminfo.min_frame_size = (&bytes[i..i + 3]).read_uint::<BE>(3).unwrap() as u32;
@@ -241,7 +239,7 @@ impl StreamInfo {
         i += 3;
 
         // first 16 bits of sample rate
-        let sample_first = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap()) as u16;
+        let sample_first = u16::from_be_bytes((&bytes[i..i + 2]).try_into().unwrap());
         i += 2;
 
         // last 4 bits of sample rate, 3 bits of channel, first bit of bits/sample
@@ -278,13 +276,13 @@ impl StreamInfo {
 
         // last 4 bits of sample rate, 3 bits of channel, first bit of bits/sample
         let byte = ((self.sample_rate & 0xF) << 4) as u8
-            | (((self.num_channels - 1) & 0x7) << 1) as u8
-            | (((self.bits_per_sample - 1) >> 4) & 0x1) as u8;
+            | (((self.num_channels - 1) & 0x7) << 1)
+            | (((self.bits_per_sample - 1) >> 4) & 0x1);
         bytes.push(byte);
 
         // last 4 bits of bits/sample, first 4 bits of sample count
-        let byte = (((self.bits_per_sample - 1) & 0xF) << 4) as u8
-            | ((self.total_samples >> 32) & 0xF) as u8;
+        let byte =
+            (((self.bits_per_sample - 1) & 0xF) << 4) | ((self.total_samples >> 32) & 0xF) as u8;
         bytes.push(byte);
 
         // last 32 bits of sample count
@@ -528,12 +526,11 @@ impl CueSheet {
 
         assert!(self.catalog_num.len() <= 128);
 
-        bytes.extend(self.catalog_num.clone().into_bytes().into_iter());
+        bytes.extend(self.catalog_num.clone().into_bytes());
         bytes.extend(
             repeat(0)
                 .take(128 - self.catalog_num.len())
-                .collect::<Vec<u8>>()
-                .into_iter(),
+                .collect::<Vec<u8>>(),
         );
         bytes.extend(self.num_leadin.to_be_bytes().iter());
 
@@ -746,11 +743,11 @@ impl Picture {
 
         let mime_type = self.mime_type.clone().into_bytes();
         bytes.extend((mime_type.len() as u32).to_be_bytes().iter());
-        bytes.extend(mime_type.into_iter());
+        bytes.extend(mime_type);
 
         let description = self.description.clone().into_bytes();
         bytes.extend((description.len() as u32).to_be_bytes().iter());
-        bytes.extend(description.into_iter());
+        bytes.extend(description);
 
         bytes.extend(self.width.to_be_bytes().iter());
         bytes.extend(self.height.to_be_bytes().iter());
@@ -759,7 +756,7 @@ impl Picture {
 
         let data = self.data.clone();
         bytes.extend((data.len() as u32).to_be_bytes().iter());
-        bytes.extend(data.into_iter());
+        bytes.extend(data);
 
         bytes
     }
@@ -944,7 +941,7 @@ impl VorbisComment {
         let vendor_string = self.vendor_string.clone().into_bytes();
 
         bytes.extend((vendor_string.len() as u32).to_le_bytes().iter());
-        bytes.extend(vendor_string.into_iter());
+        bytes.extend(vendor_string);
 
         bytes.extend(
             (self
@@ -1221,7 +1218,7 @@ pub(crate) fn read_ident<R: Read>(mut reader: R) -> Result<()> {
     reader.read_exact(&mut ident)?;
 
     // skip id3 v2.2, v2.3 and v2.4
-    if &ident[0..3] == b"ID3" && vec![0x02, 0x03, 0x04].contains(&ident[3]) {
+    if &ident[0..3] == b"ID3" && [0x02, 0x03, 0x04].contains(&ident[3]) {
         let mut header_tail = [0; 6];
         reader.read_exact(&mut header_tail)?;
         // Header layout from the id3v2 tag spec:
