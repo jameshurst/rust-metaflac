@@ -1,11 +1,11 @@
 # rust-metaflac
 
-[![Build Status](https://travis-ci.org/jameshurst/rust-metaflac.svg)](https://travis-ci.org/jameshurst/rust-metaflac)
-[![](http://meritbadge.herokuapp.com/metaflac)](https://crates.io/crates/metaflac)
+[![Crates.io Version](https://img.shields.io/crates/v/metaflac)](https://crates.io/crates/metaflac)
+[![docs.rs](https://img.shields.io/docsrs/metaflac)](https://docs.rs/metaflac)
+[![Crates.io License](https://img.shields.io/crates/l/metaflac)](./LICENSE)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jameshurst/rust-metaflac/ci.yaml)](https://github.com/jameshurst/rust-metaflac/actions/workflows/ci.yaml)
 
 A library for reading and writing FLAC metadata.
-
-[Documentation](http://jameshurst.github.io/rust-metaflac/)
 
 ## Usage
 
@@ -17,15 +17,13 @@ metaflac = "0.2.6"
 ```
 
 ```rust
-extern crate metaflac;
-
 use metaflac::Tag;
 
 fn main() {
-	let tag = Tag::read_from_path("music.flac").unwrap();
+  let tag = Tag::read_from_path("music.flac").unwrap();
 
-	// Some things modifying the tag
+  // Some things modifying the tag
 
-	tag.save().unwrap();
+  tag.save().unwrap();
 }
 ```
