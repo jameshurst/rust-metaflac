@@ -1,4 +1,4 @@
-# rust-metaflac 
+# rust-metaflac
 
 [![Build Status](https://travis-ci.org/jameshurst/rust-metaflac.svg)](https://travis-ci.org/jameshurst/rust-metaflac)
 [![](http://meritbadge.herokuapp.com/metaflac)](https://crates.io/crates/metaflac)
@@ -13,7 +13,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-metaflac = "0.2"
+metaflac = "0.2.6"
 ```
 
 ```rust
