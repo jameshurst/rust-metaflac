@@ -8,7 +8,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 /// A structure representing a flac metadata tag.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tag {
     /// The path from which the blocks were loaded.
     path: Option<PathBuf>,
