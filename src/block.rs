@@ -1,6 +1,8 @@
 use crate::error::{Error, ErrorKind, Result};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -53,6 +55,7 @@ impl BlockType {
 // }}}
 
 /// The parsed content of a metadata block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
@@ -177,6 +180,7 @@ impl Block {
 
 // StreamInfo {{{
 /// A structure representing a STREAMINFO block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
 pub struct StreamInfo {
     /// The minimum block size (in samples) used in the stream.
@@ -307,6 +311,7 @@ impl Default for StreamInfo {
 
 // Application {{{
 /// A structure representing an APPLICATION block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
 pub struct Application {
     /// Registered application ID.
@@ -368,6 +373,7 @@ impl Default for Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point.
@@ -393,6 +399,7 @@ impl Default for CueSheetTrackIndex {
 }
 
 /// A structure representing a cuesheet track.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
@@ -432,6 +439,7 @@ impl Default for CueSheetTrack {
 }
 
 /// A structure representing a CUESHEET block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CueSheet {
     /// Media catalog number.
@@ -590,6 +598,7 @@ impl Default for CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(missing_docs)]
 pub enum PictureType {
@@ -646,6 +655,7 @@ impl PictureType {
 }
 
 /// A structure representing a PICTURE block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
 pub struct Picture {
     /// The picture type.
@@ -772,6 +782,7 @@ impl Default for Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
@@ -830,6 +841,7 @@ impl Default for SeekPoint {
 //}}}
 
 /// A structure representing a SEEKTABLE block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SeekTable {
     /// One or more seek points.
@@ -880,6 +892,7 @@ impl Default for SeekTable {
 
 // VorbisComment {{{
 /// A structure representing a VORBIS_COMMENT block.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VorbisComment {
     /// The vendor string.
