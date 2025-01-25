@@ -1,8 +1,6 @@
 use crate::error::{Error, ErrorKind, Result};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -55,8 +53,8 @@ impl BlockType {
 // }}}
 
 /// The parsed content of a metadata block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
     StreamInfo(StreamInfo),
@@ -180,8 +178,8 @@ impl Block {
 
 // StreamInfo {{{
 /// A structure representing a STREAMINFO block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StreamInfo {
     /// The minimum block size (in samples) used in the stream.
     pub min_block_size: u16,
@@ -250,7 +248,7 @@ impl StreamInfo {
         let sample_channel_bps = bytes[i];
         i += 1;
 
-        streaminfo.sample_rate = (sample_first as u32) << 4 | (sample_channel_bps as u32) >> 4;
+        streaminfo.sample_rate = ((sample_first as u32) << 4) | ((sample_channel_bps as u32) >> 4);
         streaminfo.num_channels = ((sample_channel_bps >> 1) & 0x7) + 1;
 
         // last 4 bits of bits/sample, 36 bits of total samples
@@ -258,7 +256,7 @@ impl StreamInfo {
         i += 5;
 
         streaminfo.bits_per_sample =
-            ((sample_channel_bps & 0x1) << 4 | (bps_total >> 36) as u8) + 1;
+            (((sample_channel_bps & 0x1) << 4) | (bps_total >> 36) as u8) + 1;
         streaminfo.total_samples = bps_total & 0xF_FF_FF_FF_FF;
 
         streaminfo.md5 = bytes[i..i + 16].to_vec();
@@ -311,8 +309,8 @@ impl Default for StreamInfo {
 
 // Application {{{
 /// A structure representing an APPLICATION block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Application {
     /// Registered application ID.
     pub id: Vec<u8>,
@@ -373,8 +371,8 @@ impl Default for Application {
 
 // CueSheet {{{
 /// A structure representing a cuesheet track index.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CueSheetTrackIndex {
     /// Offset in samples, relative to the track offset, of the index point.
     pub offset: u64,
@@ -399,8 +397,8 @@ impl Default for CueSheetTrackIndex {
 }
 
 /// A structure representing a cuesheet track.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CueSheetTrack {
     /// Track offset in samples, relative to the beginning of the FLAC audio stream. It is the
     /// offset to the first index point of the track.
@@ -439,8 +437,8 @@ impl Default for CueSheetTrack {
 }
 
 /// A structure representing a CUESHEET block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CueSheet {
     /// Media catalog number.
     pub catalog_num: String,
@@ -598,8 +596,8 @@ impl Default for CueSheet {
 
 // Picture {{{
 /// Types of pictures that can be used in the picture block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum PictureType {
     Other,
@@ -655,8 +653,8 @@ impl PictureType {
 }
 
 /// A structure representing a PICTURE block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Picture {
     /// The picture type.
     pub picture_type: PictureType,
@@ -782,8 +780,8 @@ impl Default for Picture {
 // SeekTable {{{
 // SeekPoint {{{
 /// A structure representing a seektable seek point.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SeekPoint {
     /// Sample number of first sample in the target frame, or 0xFFFFFFFFFFFFFFFF for a placeholder
     /// point.
@@ -841,8 +839,8 @@ impl Default for SeekPoint {
 //}}}
 
 /// A structure representing a SEEKTABLE block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SeekTable {
     /// One or more seek points.
     pub seekpoints: Vec<SeekPoint>,
@@ -892,8 +890,8 @@ impl Default for SeekTable {
 
 // VorbisComment {{{
 /// A structure representing a VORBIS_COMMENT block.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VorbisComment {
     /// The vendor string.
     pub vendor_string: String,
@@ -1240,9 +1238,9 @@ pub(crate) fn read_ident<R: Read>(mut reader: R) -> Result<()> {
         // 1 Byte: Flags, bit 0x10 indicates a 10-Byte footer
         // 4 Bytes: size of the Tag, excluding header and footer, taking 7 bits per byte.
         let has_footer = header_tail[1] & 0x10 > 0;
-        let size = (header_tail[2] as u32 & 0b_0111_1111) << 21
-            | (header_tail[3] as u32 & 0b_0111_1111) << 14
-            | (header_tail[4] as u32 & 0b_0111_1111) << 7
+        let size = ((header_tail[2] as u32 & 0b_0111_1111) << 21)
+            | ((header_tail[3] as u32 & 0b_0111_1111) << 14)
+            | ((header_tail[4] as u32 & 0b_0111_1111) << 7)
             | (header_tail[5] as u32 & 0b_0111_1111);
         // Discard `size` bytes without allocating. See https://stackoverflow.com/questions/42243355/how-to-advance-through-data-from-the-stdioread-trait-when-seek-isnt-impleme
         if has_footer {

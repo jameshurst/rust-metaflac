@@ -2,16 +2,14 @@ use crate::block::{Block, BlockType, Blocks, Picture, PictureType, StreamInfo, V
 use crate::error::{Error, ErrorKind, Result};
 
 use byteorder::{BigEndian, ReadBytesExt};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 /// A structure representing a flac metadata tag.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tag {
     /// The path from which the blocks were loaded.
     path: Option<PathBuf>,
