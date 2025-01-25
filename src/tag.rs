@@ -2,12 +2,15 @@ use crate::block::{Block, BlockType, Blocks, Picture, PictureType, StreamInfo, V
 use crate::error::{Error, ErrorKind, Result};
 
 use byteorder::{BigEndian, ReadBytesExt};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 /// A structure representing a flac metadata tag.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
 pub struct Tag {
     /// The path from which the blocks were loaded.
@@ -543,5 +546,51 @@ mod tests {
 
         tag.remove_vorbis("key");
         assert!(tag.get_vorbis("KEY").is_none());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde() {
+        let expected = r#"{
+  "path": null,
+  "blocks": [
+    {
+      "VorbisComment": {
+        "vendor_string": "",
+        "comments": {
+          "KEY": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "Picture": {
+        "picture_type": "CoverFront",
+        "mime_type": "image/jpeg",
+        "description": "",
+        "width": 0,
+        "height": 0,
+        "depth": 0,
+        "num_colors": 0,
+        "data": [
+          255
+        ]
+      }
+    }
+  ],
+  "length": 0
+}"#;
+        let mut tag = Tag::new();
+        tag.set_vorbis("key", vec!["value"]);
+        tag.add_picture("image/jpeg", PictureType::CoverFront, vec![0xFF]);
+
+        let serialized = serde_json::to_string_pretty(&tag).unwrap();
+        let deserialized: Tag = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(tag.vorbis_comments(), deserialized.vorbis_comments());
+        assert_eq!(tag.pictures().count(), deserialized.pictures().count());
+        println!("{:#}", serialized);
+        assert_eq!(serialized, expected);
     }
 }
