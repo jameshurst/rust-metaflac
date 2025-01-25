@@ -53,7 +53,7 @@ impl BlockType {
 // }}}
 
 /// The parsed content of a metadata block.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Block {
     /// A value containing a parsed streaminfo block.
