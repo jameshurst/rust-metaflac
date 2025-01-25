@@ -3,8 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   rustfmt:
@@ -18,9 +17,7 @@ jobs:
         with:
           components: rustfmt
       - name: rustfmt check
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        run: cargo fmt --all --check
+        run: cargo fmt --check
 
   clippy:
     name: clippy
@@ -33,7 +30,9 @@ jobs:
         with:
           components: clippy
       - name: clippy check
-        run: cargo clippy --workspace --all-targets --all-features --no-deps -- -D warnings
+        run: |
+          cargo clippy --no-deps --all-targets -- -D warnings
+          cargo clippy --no-deps --all-targets --features=serde -- -D warnings
 
   docs:
     name: docs
@@ -42,9 +41,11 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: install rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
       - name: docs check
-        run: cargo doc --workspace --no-deps --all-features --document-private-items
+        run: |
+          cargo doc --no-deps
+          cargo doc --no-deps --features=serde
 
   test:
     name: test
@@ -53,6 +54,8 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: install rust
-        uses: dtolnay/rust-toolchain@nightly
-      - name: test
-        run: cargo test --workspace --all-features
+        uses: dtolnay/rust-toolchain@stable
+      - name: run tests
+        run: |
+          cargo test
+          cargo test --features=serde
